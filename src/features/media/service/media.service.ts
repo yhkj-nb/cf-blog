@@ -9,14 +9,7 @@ import {
   MAX_FILE_SIZE,
 } from "@/features/media/media.schema";
 import { getImageDimensions } from "@/features/media/utils/image-dimensions";
-import {
-  getContentTypeFromKey,
-  getTransformSourceUrl,
-  parseImageTransform,
-  isGifKey,
-} from "@/features/media/utils/media.utils";
 import * as PostMediaRepo from "@/features/posts/data/post-media.data";
-import { CACHE_CONTROL } from "@/lib/constants";
 import { err, ok } from "@/lib/errors";
 
 export async function upload(
@@ -280,110 +273,14 @@ function fileNameFromUrl(url: URL, mimeType: string) {
 }
 
 export async function handleImageRequest(
-  env: Env,
+  _env: Env,
   key: string,
-  request: Request,
+  _request: Request,
 ) {
-  const url = new URL(request.url);
-  const searchParams = url.searchParams;
-
-  const serveOriginal = async () => {
-    const object = await env.R2.get(key);
-    if (!object) {
-      return new Response("Image not found", { status: 404 });
-    }
-
-    const contentType =
-      object.httpMetadata?.contentType ||
-      getContentTypeFromKey(key) ||
-      "application/octet-stream";
-
-    const headers = new Headers();
-    object.writeHttpMetadata(headers);
-    headers.set("Content-Type", contentType);
-    headers.set("ETag", object.httpEtag);
-    Object.entries(CACHE_CONTROL.public).forEach(([k, v]) => {
-      headers.set(k, v);
-    });
-
-    return new Response(object.body, { headers });
-  };
-
-  // 1. 防止循环调用 & 显式请求原图
-  const viaHeader = request.headers.get("via");
-  const isLoop = viaHeader && /image-resizing/.test(viaHeader);
-  const wantsOriginal = searchParams.get("original") === "true";
-
-  const isLocalDev =
-    url.hostname === "localhost" || url.hostname === "127.0.0.1";
-
-  // 2. 构建 Cloudflare Image Resizing 参数（只接受允许的宽度，其余返回原图）
-  const transformOptions = parseImageTransform(
-    searchParams,
-    request.headers.get("Accept") || "",
-  );
-  if (
-    isLoop ||
-    wantsOriginal ||
-    isLocalDev ||
-    isGifKey(key) ||
-    !transformOptions
-  ) {
-    return await serveOriginal();
+  // R2 存储已移除：用户图片与站点资源均存储在外部图床，直接以公开 URL 访问，
+  // 不再经过 /images/{key} 代理。若 key 本身是外部 URL，直接重定向；否则 404。
+  if (key.startsWith("http://") || key.startsWith("https://")) {
+    return Response.redirect(key, 302);
   }
-
-  // 3. 尝试进行图片处理
-  try {
-    const sourceImageUrl = getTransformSourceUrl(url, key);
-
-    const subRequestHeaders = new Headers();
-
-    const headersToKeep = ["user-agent", "accept"];
-    for (const [k, v] of request.headers.entries()) {
-      if (headersToKeep.includes(k.toLowerCase())) {
-        subRequestHeaders.set(k, v);
-      }
-    }
-
-    const imageRequest = new Request(sourceImageUrl, {
-      headers: subRequestHeaders,
-    });
-
-    // 调用 Cloudflare Images 变换
-    const response = await fetch(imageRequest, {
-      cf: { image: transformOptions },
-    });
-
-    // 如果变换失败 (如格式不支持)，降级回原图
-    if (!response.ok) {
-      console.error(
-        JSON.stringify({
-          message: "image transform failed",
-          key,
-          status: response.status,
-          statusText: response.statusText,
-        }),
-      );
-      return await serveOriginal();
-    }
-
-    // 4. 返回处理后的图片
-    const newResponse = new Response(response.body, response);
-
-    newResponse.headers.set("Vary", "Accept");
-    Object.entries(CACHE_CONTROL.immutable).forEach(([k, v]) => {
-      newResponse.headers.set(k, v);
-    });
-
-    return newResponse;
-  } catch (e) {
-    console.error(
-      JSON.stringify({
-        message: "image transform error",
-        key,
-        error: e instanceof Error ? e.message : String(e),
-      }),
-    );
-    return await serveOriginal();
-  }
+  return new Response("Image not found", { status: 404 });
 }
