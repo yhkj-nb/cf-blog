@@ -8,7 +8,6 @@
  *   - xingye    : 星野图床（公开签名端点，开箱即用）
  *   - bilibili  : B 站图床（需 SESSDATA + bili_jct Cookie）
  *   - chatglm   : 智谱 ChatGLM 图床（开箱即用，可选 Cookie）
- *   - qq_channel: QQ 频道图床（需 Bot appId/secret + channelId）
  *   - self_hosted: 你自己的图床（通用 HTTP 上传接口）
  *
  * 链式回退：上传时按 chain 顺序依次尝试，前一个失败自动换下一个，不会卡住。
@@ -25,7 +24,6 @@ export type ImageHostDriver =
   | "xingye"
   | "bilibili"
   | "chatglm"
-  | "qq_channel"
   | "self_hosted"
   | "r2";
 
@@ -39,12 +37,6 @@ export interface BilibiliConfig {
 }
 export interface ChatglmConfig {
   cookie?: string;
-}
-export interface QqChannelConfig {
-  appId: string;
-  secret: string;
-  channelId: string;
-  apiBase?: string;
 }
 export interface SelfHostedConfig {
   uploadUrl: string;
@@ -65,7 +57,6 @@ export interface ImageHostConfig {
   cnb?: CnbConfig;
   bilibili?: BilibiliConfig;
   chatglm?: ChatglmConfig;
-  qq_channel?: QqChannelConfig;
   self_hosted?: SelfHostedConfig;
 }
 
@@ -116,8 +107,6 @@ export async function uploadToImageHost(
       return uploadBilibili(cfg, file);
     case "chatglm":
       return uploadChatglm(cfg, file);
-    case "qq_channel":
-      return uploadQqChannel(cfg, file);
     case "self_hosted":
       return uploadSelfHosted(cfg, file);
     case "r2":
@@ -319,41 +308,7 @@ async function uploadChatglm(cfg: ImageHostConfig, file: UploadInput): Promise<s
 }
 
 // ---------------------------------------------------------------------------
-// 6) QQ 频道
-// ---------------------------------------------------------------------------
-async function uploadQqChannel(cfg: ImageHostConfig, file: UploadInput): Promise<string> {
-  const q = cfg.qq_channel;
-  if (!q?.appId?.trim() || !q?.secret?.trim() || !q?.channelId?.trim()) {
-    throw new Error("QQ频道图床未配置 appId / secret / channelId");
-  }
-  const apiBase = q.apiBase?.trim() || "https://api.sgroup.qq.com";
-
-  const tokenResp = await fetch("https://bots.qq.com/app/getAppAccessToken", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ appId: q.appId.trim(), clientSecret: q.secret.trim() }),
-  });
-  const tokenData = (await tokenResp.json()) as { access_token?: string };
-  const accessToken = tokenData.access_token;
-  if (!accessToken) throw new Error("QQ频道获取 access_token 失败");
-
-  const form = new FormData();
-  form.append("file_image", new File([file.bytes], file.filename, { type: file.contentType }));
-  form.append("msg_id", "1");
-
-  const resp = await fetch(`${apiBase}/channels/${q.channelId.trim()}/messages`, {
-    method: "POST",
-    body: form,
-    headers: { Authorization: `QQBot ${accessToken}` },
-  });
-  if (!resp.ok) throw new Error(`QQ频道上传失败 (HTTP ${resp.status})`);
-
-  const md5 = await md5Hex(file.bytes);
-  return `https://gchat.qpic.cn/qmeetpic/0/0-0-${md5}/0`;
-}
-
-// ---------------------------------------------------------------------------
-// 7) 自建图床（通用 HTTP 上传接口）
+// 6) 自建图床（通用 HTTP 上传接口）
 // ---------------------------------------------------------------------------
 async function uploadSelfHosted(cfg: ImageHostConfig, file: UploadInput): Promise<string> {
   const s = cfg.self_hosted;
