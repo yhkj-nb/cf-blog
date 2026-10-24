@@ -1,0 +1,28 @@
+{
+  "chain": ["nature", "xingye", "chatglm"],
+  "cnb": {
+    "repo": "你的用户名/你的仓库",
+    "token": "CNB_ACCESS_TOKEN"
+  },
+  "bilibili": {
+    "sessdata": "你的SESSDATA",
+    "biliJct": "你的BILI_JCT"
+  },
+  "chatglm": {
+    "cookie": ""
+  },
+  "qq_channel": {
+    "appId": "你的机器人AppId",
+    "secret": "你的机器人Secret",
+    "channelId": "你的频道ID",
+    "apiBase": "https://bots.qq.com"
+  },
+  "self_hosted": {
+    "uploadUrl": "https://你的图床/upload",
+    "token": "",
+    "fieldName": "file",
+    "responseUrlField": "url",
+    "urlPrefix": "",
+    "responseIsJson": true
+  }
+}
