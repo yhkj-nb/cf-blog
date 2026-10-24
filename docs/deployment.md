@@ -52,11 +52,12 @@
 | `WORKER_NAME` | `flare-blog` | Worker 应用名称，第 6 步的 Project name 必须与它一致 |
 | `DOMAIN` | `blog.example.com` | 博客的纯域名 |
 | `D1_DATABASE_ID` | 第 4 步复制的 Database ID / UUID | 找到存放文章、用户等数据的数据库 |
-| `BUCKET_NAME` | `blog-media` | 找到存放图片等文件的 R2 存储桶 |
 | `QUEUE_NAME` | `blog-queue` | 找到处理通知等异步任务的队列 |
 | `KV_NAMESPACE_ID` | 第 4 步复制的 Namespace ID | 找到博客使用的缓存空间 |
 
-构建清单保留上面六项，先填好 `WORKER_NAME` 和 `DOMAIN`，其余值在第 4 步补齐。模板中的可选项和本地工具变量可以跳过。
+构建清单保留上面五项，先填好 `WORKER_NAME` 和 `DOMAIN`，其余值在第 4 步补齐。模板中的可选项和本地工具变量可以跳过。
+
+> **图片存储说明**：本项目已不再使用 R2 存储桶。用户图片与站点资源（favicon、主题图等）均存储在免费图床（默认 `nature` / `xingye` / `chatglm` 三个免凭据图床，开箱即用），因此**无需创建 R2 存储桶、无需 `BUCKET_NAME`**。如需使用带令牌的图床，见根目录 `image-host.config.example.json`。
 
 #### 运行时必填项
 
@@ -113,9 +114,10 @@ Array.from(crypto.getRandomValues(new Uint8Array(32)), (n) =>
 | 资源 | 左侧菜单入口 | 示例名称 | 写入构建清单的内容 |
 | --- | --- | --- | --- |
 | D1 数据库 | Storage & databases → D1 SQLite Database | `blog-db` | **ID** → `D1_DATABASE_ID` |
-| R2 存储桶 | Storage & databases → R2 Object Storage | `blog-media` | **名称** → `BUCKET_NAME` |
 | Queue 队列 | Compute → Queues | `blog-queue` | **名称** → `QUEUE_NAME` |
 | KV 命名空间 | Storage & databases → Workers KV | `blog-cache` | **ID** → `KV_NAMESPACE_ID` |
+
+> **无需 R2 存储桶**：图片与站点资源改存免费图床，不再需要 R2，跳过对应的创建步骤。
 
 #### D1：存放文章和用户数据
 
@@ -129,13 +131,7 @@ Array.from(crypto.getRandomValues(new Uint8Array(32)), (n) =>
 
 部署时会自动初始化数据库。
 
-#### R2：存放图片等文件
-
-进入 **R2 Object Storage**，点击 **Create bucket**，填写名称，例如 `blog-media`。Location 保留 **Automatic**，Default Storage Class 保留 **Standard**，点击页面底部的 **Create bucket**。
-
-![R2 存储桶的名称填写示例](./assets/deployment/05-r2.png)
-
-把存储桶**名称**填入 `BUCKET_NAME`，其余设置保留默认值。
+> **跳过 R2**：本项目图片与站点资源已改用免费图床存储，不需要创建 R2 存储桶，直接进入下一步。
 
 #### Queue：处理通知等异步任务
 
