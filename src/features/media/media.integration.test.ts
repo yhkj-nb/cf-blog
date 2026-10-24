@@ -26,28 +26,25 @@ import * as MediaService from "./service/media.service";
 describe("MediaService", () => {
   let adminContext: ReturnType<typeof createAdminTestContext>;
 
-  // Mock R2 storage functions
+  // Mock 图片存储（外部图床）函数
   beforeEach(async () => {
     adminContext = createAdminTestContext();
     await seedUser(adminContext.db, adminContext.session.user);
 
-    // Mock R2 operations at storage layer to avoid Miniflare R2 isolation/serialization issues.
-    // We trust the `r2-sanity.test.ts` (or equivalent verification) matches the platform behavior,
-    // and here we focus on Service Logic + DB integration.
-
-    vi.spyOn(Storage, "putToR2").mockImplementation(async (_env, file, key) => {
-      const nextKey = key ?? `mocked-${Date.now()}-${file.name}`;
+    // 直接 mock Storage 层，避免真实调用外部图床；聚焦 Service 逻辑与 DB 集成。
+    vi.spyOn(Storage, "uploadImage").mockImplementation(async (_env, file) => {
+      const nextKey = `mocked-${Date.now()}-${file.name}`;
+      const url = `https://mock.host/${nextKey}`;
       return {
-        key: nextKey,
-        url: `/images/${nextKey}`,
+        key: url,
+        url,
         fileName: file.name,
         mimeType: file.type,
         sizeInBytes: file.size,
       };
     });
 
-    vi.spyOn(Storage, "deleteFromR2").mockResolvedValue(undefined);
-    vi.spyOn(Storage, "getFromR2").mockResolvedValue(null);
+    vi.spyOn(Storage, "deleteImageStorage").mockResolvedValue(undefined);
   });
 
   // ============================================
@@ -66,10 +63,10 @@ describe("MediaService", () => {
         mimeType: "image/png",
       });
       expect(result.key).toContain("mocked-");
-      expect(result.url).toContain("/images/");
+      expect(result.url).toContain("mocked-");
 
-      // Verify Storage.putToR2 was called
-      expect(Storage.putToR2).toHaveBeenCalledWith(adminContext.env, file);
+      // Verify Storage.uploadImage was called
+      expect(Storage.uploadImage).toHaveBeenCalledWith(adminContext.env, file);
 
       // Verify DB record was created
       const mediaList = await MediaService.getMediaList(adminContext, {});
@@ -81,11 +78,11 @@ describe("MediaService", () => {
         type: "image/png",
       });
 
-      // Make putToR2 work but insertMedia fail
+      // Make uploadImage work but insertMedia fail
       const mockKey = `rollback-key-${Date.now()}`;
-      vi.mocked(Storage.putToR2).mockResolvedValueOnce({
-        key: mockKey,
-        url: `/images/${mockKey}`,
+      vi.mocked(Storage.uploadImage).mockResolvedValueOnce({
+        key: `https://mock.host/${mockKey}`,
+        url: `https://mock.host/${mockKey}`,
         fileName: file.name,
         mimeType: file.type,
         sizeInBytes: file.size,
@@ -103,10 +100,10 @@ describe("MediaService", () => {
       // Wait for rollback
       await waitForBackgroundTasks(adminContext.executionCtx);
 
-      // Verify deleteFromR2 was called with the uploaded key
-      expect(Storage.deleteFromR2).toHaveBeenCalledWith(
+      // Verify deleteImageStorage was called with the uploaded key
+      expect(Storage.deleteImageStorage).toHaveBeenCalledWith(
         adminContext.env,
-        mockKey,
+        `https://mock.host/${mockKey}`,
       );
     });
 
@@ -136,12 +133,12 @@ describe("MediaService", () => {
       );
 
       // Reset mock to track deletion call
-      vi.mocked(Storage.deleteFromR2).mockClear();
+      vi.mocked(Storage.deleteImageStorage).mockClear();
 
       // Delete it
       unwrap(await MediaService.deleteImage(adminContext, uploaded.key));
 
-      // Wait for R2 deletion in waitUntil
+      // Wait for deletion in waitUntil
       await waitForBackgroundTasks(adminContext.executionCtx);
 
       // Verify DB record is gone
@@ -150,8 +147,8 @@ describe("MediaService", () => {
         mediaList.items.find((m) => m.key === uploaded.key),
       ).toBeUndefined();
 
-      // Verify R2 deleteFromR2 was called
-      expect(Storage.deleteFromR2).toHaveBeenCalledWith(
+      // Verify deleteImageStorage was called
+      expect(Storage.deleteImageStorage).toHaveBeenCalledWith(
         adminContext.env,
         uploaded.key,
       );
@@ -460,10 +457,9 @@ describe("MediaService", () => {
       expect(replaced.fileName).toBe("new.jpg");
       expect(replaced.mimeType).toBe("image/jpeg");
       expect(replaced.sizeInBytes).toBe(next.size);
-      expect(Storage.putToR2).toHaveBeenCalledWith(
+      expect(Storage.uploadImage).toHaveBeenCalledWith(
         adminContext.env,
         next,
-        uploaded.key,
       );
     });
 
