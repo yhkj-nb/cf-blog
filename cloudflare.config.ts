@@ -9,14 +9,15 @@ import * as entrypoint from "./src/server" with { type: "cf-worker" };
 // `bun dev`, tests and CI working without any Cloudflare resources. The fixed
 // UUID is what `bun db:migrate:local` targets, so it must stay a valid D1 id.
 const env = process.env;
-const workerName = env.WORKER_NAME?.trim() || "worker-name-placeholder";
-const queueName = env.QUEUE_NAME?.trim() || "queue-name-placeholder";
-const bucketName = env.BUCKET_NAME?.trim() || "bucket-name-placeholder";
+// 非敏感的构建默认值（你在 Cloudflare 构建设置里设了同名构建变量则会覆盖这里）。
+// 注意：R2 存储桶已彻底移除，用户图片与站点资源均走免费图床，不再需要 BUCKET_NAME。
+const workerName = env.WORKER_NAME?.trim() || "cf-blog";
+const queueName = env.QUEUE_NAME?.trim() || "blog";
 const d1DatabaseId =
-  env.D1_DATABASE_ID?.trim() || "00000000-0000-4000-8000-000000000000";
+  env.D1_DATABASE_ID?.trim() || "3c255959-d438-4c96-8ff1-a8fcfe131109";
 const kvNamespaceId =
-  env.KV_NAMESPACE_ID?.trim() || "00000000000000000000000000000000";
-const domain = env.DOMAIN?.trim();
+  env.KV_NAMESPACE_ID?.trim() || "4276d1e291c34619b7391b5a52c7bc78";
+const domain = env.DOMAIN?.trim() || "yh-blog.de5.net";
 const useRoutes = ["1", "true", "yes", "on"].includes(
   env.ROUTE?.trim().toLowerCase() ?? "",
 );
@@ -66,7 +67,6 @@ export default defineConfig((ctx) => {
       env: {
         DB: bindings.d1({ id: d1DatabaseId }),
         KV: bindings.kv({ id: kvNamespaceId }),
-        R2: bindings.r2({ name: bucketName }),
         QUEUE: bindings.queue({ name: queueName }),
         IMAGE_HOST_CONFIG: bindings.text(imageHostConfig),
         IMAGE_STORAGE_DRIVER: bindings.text(imageStorageDriver),
