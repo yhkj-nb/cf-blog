@@ -1,4 +1,3 @@
-import { generateKey } from "@/features/media/utils/media.utils";
 import {
   type ImageHostConfig,
   type ImageHostDriver,
@@ -13,57 +12,17 @@ import {
  */
 const DEFAULT_DRIVERS: ImageHostDriver[] = ["nature", "xingye", "chatglm"];
 
-export async function putToR2(
-  env: Env,
-  image: File,
-  key = generateKey(image.name),
-) {
-  const contentType = image.type;
-  const url = `/images/${key}`;
-
-  await env.R2.put(key, image.stream(), {
-    httpMetadata: {
-      contentType,
-    },
-    customMetadata: {
-      originalName: image.name,
-    },
-  });
-
-  return {
-    key,
-    url,
-    fileName: image.name,
-    mimeType: contentType,
-    sizeInBytes: image.size,
-  };
-}
-
-export async function deleteFromR2(env: Env, key: string) {
-  await env.R2.delete(key);
-}
-
-export async function getFromR2(env: Env, key: string) {
-  return await env.R2.get(key);
-}
-
 /**
- * Upload a site asset (favicon, theme images) to R2 with a fixed key.
- * No DB record; overwrites in place on re-upload.
- * 站点资源仍走 R2（与用户图片库分开存储）。
+ * 上传站点资源（favicon、主题图等）。R2 已移除，站点资源与用户图片一样
+ * 走免费图床链，返回外部公开 URL（同时作为 key 与 url）。
  */
 export async function putSiteAsset(
   env: Env,
   file: File,
-  assetPath: string,
+  _assetPath: string,
 ): Promise<{ key: string; url: string }> {
-  const key = `asset/${assetPath}`;
-  await env.R2.put(key, file.stream(), {
-    httpMetadata: {
-      contentType: file.type,
-    },
-  });
-  return { key, url: `/images/${key}` };
+  const uploaded = await uploadImage(env, file);
+  return { key: uploaded.url, url: uploaded.url };
 }
 
 // ---------------------------------------------------------------------------
@@ -101,12 +60,11 @@ function resolveImageHost(env: Env): {
 /**
  * 上传一张图片：按 resolved 图床链依次尝试，前一个失败自动回退下一个。
  * 外部图床返回公开 URL，并同时作为 key 与 url 返回（渲染层对外部 URL 原样透传）。
- * r2 仍可作为链中一环：由 putToR2 处理，返回 {key,url}（key 为 R2 key）。
+ * R2 存储桶已移除，所有图片均存于免费图床。
  */
 export async function uploadImage(
   env: Env,
   image: File,
-  existingKey?: string,
 ): Promise<{
   key: string;
   url: string;
@@ -120,10 +78,6 @@ export async function uploadImage(
 
   for (const d of drivers) {
     try {
-      if (d === "r2") {
-        const r = await putToR2(env, image, existingKey);
-        return r;
-      }
       const url = await uploadToImageHost(
         { ...config, driver: d },
         { bytes, filename: image.name, contentType: image.type },
@@ -151,14 +105,13 @@ export async function uploadImage(
 }
 
 /**
- * 删除一张图片存储。外部图床大多无删除接口，仅记日志不真删远端；
- * R2 key（http(s) 以外的，如 uuid.ext 或 /images/xxx）则走 R2 删除兜底。
+ * 删除一张图片存储。外部图床大多无删除接口，仅记日志不真删远端。
+ * 由于 R2 已移除，所有图片 key 均为外部 URL，直接跳过远端删除。
  */
 export async function deleteImageStorage(env: Env, key: string) {
   if (key.startsWith("http://") || key.startsWith("https://")) {
     console.log(`[image-host] 外部图床图片不删除远端：${key}`);
     return;
   }
-  const r2key = key.startsWith("/images/") ? key.replace(/^\/images\//, "") : key;
-  await deleteFromR2(env, r2key);
+  console.log(`[image-host] 非外部图床 key，无 R2 绑定可删除：${key}`);
 }
