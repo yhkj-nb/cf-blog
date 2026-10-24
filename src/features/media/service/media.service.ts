@@ -11,7 +11,6 @@ import {
 import { getImageDimensions } from "@/features/media/utils/image-dimensions";
 import {
   getContentTypeFromKey,
-  getOriginalImageUrl,
   getTransformSourceUrl,
   parseImageTransform,
   isGifKey,
@@ -30,7 +29,8 @@ export async function upload(
   const width = dimensions?.width;
   const height = dimensions?.height;
 
-  const uploaded = await Storage.putToR2(context.env, file);
+  // 图片存储走免费图床链（替换 R2），返回的 key/url 即图床公开 URL
+  const uploaded = await Storage.uploadImage(context.env, file);
 
   try {
     const mediaRecord = await MediaRepo.insertMedia(context.db, {
@@ -46,23 +46,24 @@ export async function upload(
   } catch (error) {
     console.error(
       JSON.stringify({
-        message: "media db insert failed, rolling back r2 upload",
+        message: "media db insert failed, rolling back upload",
         key: uploaded.key,
         error: error instanceof Error ? error.message : String(error),
       }),
     );
     context.executionCtx.waitUntil(
-      Storage.deleteFromR2(context.env, uploaded.key).catch((rollbackError) =>
-        console.error(
-          JSON.stringify({
-            message: "r2 rollback delete failed",
-            key: uploaded.key,
-            error:
-              rollbackError instanceof Error
-                ? rollbackError.message
-                : String(rollbackError),
-          }),
-        ),
+      Storage.deleteImageStorage(context.env, uploaded.key).catch(
+        (rollbackError) =>
+          console.error(
+            JSON.stringify({
+              message: "upload rollback delete failed",
+              key: uploaded.key,
+              error:
+                rollbackError instanceof Error
+                  ? rollbackError.message
+                  : String(rollbackError),
+            }),
+          ),
       ),
     );
     return err({ reason: "MEDIA_RECORD_CREATE_FAILED" });
@@ -83,10 +84,10 @@ export async function deleteImage(
 
   await MediaRepo.deleteMedia(context.db, key);
   context.executionCtx.waitUntil(
-    Storage.deleteFromR2(context.env, key).catch((deleteError) =>
+    Storage.deleteImageStorage(context.env, key).catch((deleteError) =>
       console.error(
         JSON.stringify({
-          message: "r2 delete failed",
+          message: "image delete failed",
           key,
           error:
             deleteError instanceof Error
@@ -147,10 +148,9 @@ export async function replaceImage(
   }
 
   const dimensions = getImageDimensions(await input.file.arrayBuffer());
-  await Storage.putToR2(context.env, input.file, input.key);
-  // The key stays, so a new version keeps cached copies of the old file from
-  // answering for the new one.
-  const url = `${getOriginalImageUrl(input.key)}?v=${Date.now()}`;
+  // 重新上传到图床链（外部图床每次返回新 URL）
+  const uploaded = await Storage.uploadImage(context.env, input.file);
+  const url = `${uploaded.url}?v=${Date.now()}`;
   const updated = await MediaRepo.updateMediaFile(context.db, input.key, {
     url,
     fileName: input.file.name || existing.fileName,
@@ -172,10 +172,10 @@ export async function deleteUnused(
   const keys = await MediaRepo.deleteUnusedMedia(context.db);
   for (const key of keys) {
     context.executionCtx.waitUntil(
-      Storage.deleteFromR2(context.env, key).catch((deleteError) =>
+      Storage.deleteImageStorage(context.env, key).catch((deleteError) =>
         console.error(
           JSON.stringify({
-            message: "r2 delete failed",
+            message: "image delete failed",
             key,
             error:
               deleteError instanceof Error
@@ -317,9 +317,6 @@ export async function handleImageRequest(
   const isLocalDev =
     url.hostname === "localhost" || url.hostname === "127.0.0.1";
 
-  // Miniflare's local Image Resizing encodes AVIF extremely slowly (~30s for a
-  // ~1MB hero image). Serve the R2 original in local dev; production still
-  // goes through Cloudflare Image Resizing.
   // 2. 构建 Cloudflare Image Resizing 参数（只接受允许的宽度，其余返回原图）
   const transformOptions = parseImageTransform(
     searchParams,
@@ -371,7 +368,6 @@ export async function handleImageRequest(
     }
 
     // 4. 返回处理后的图片
-    // 使用 new Response(response.body, response) 保持状态码和其它优化头信息
     const newResponse = new Response(response.body, response);
 
     newResponse.headers.set("Vary", "Accept");
