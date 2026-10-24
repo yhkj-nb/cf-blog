@@ -11,12 +11,6 @@
   "chatglm": {
     "cookie": ""
   },
-  "qq_channel": {
-    "appId": "你的机器人AppId",
-    "secret": "你的机器人Secret",
-    "channelId": "你的频道ID",
-    "apiBase": "https://bots.qq.com"
-  },
   "self_hosted": {
     "uploadUrl": "https://你的图床/upload",
     "token": "",
