@@ -21,6 +21,14 @@ const useRoutes = ["1", "true", "yes", "on"].includes(
   env.ROUTE?.trim().toLowerCase() ?? "",
 );
 
+// 图床配置（替换 R2 作为用户图片库）：
+//   IMAGE_STORAGE_DRIVER  : 逗号分隔的图床驱动链，缺省使用三个免凭据图床。
+//   IMAGE_HOST_CONFIG     : 图床详细 JSON（含各图床令牌），缺省留空。
+// 二者都作为构建变量注入；未配置时回落到免凭据默认链，开箱即用。
+const imageHostConfig = env.IMAGE_HOST_CONFIG?.trim() ?? "";
+const imageStorageDriver =
+  env.IMAGE_STORAGE_DRIVER?.trim() || "nature,xingye,chatglm";
+
 export default defineConfig((ctx) => {
   // Tests only produce to the queue; a consumer would race their assertions.
   const isTest = ctx.mode === "test";
@@ -60,6 +68,8 @@ export default defineConfig((ctx) => {
         KV: bindings.kv({ id: kvNamespaceId }),
         R2: bindings.r2({ name: bucketName }),
         QUEUE: bindings.queue({ name: queueName }),
+        IMAGE_HOST_CONFIG: bindings.text(imageHostConfig),
+        IMAGE_STORAGE_DRIVER: bindings.text(imageStorageDriver),
       },
       // Durable Objects are reached through `exports` from `cloudflare:workers`,
       // so they need no binding. Once deployed this way, rolling back to a
