@@ -11,7 +11,9 @@ import * as entrypoint from "./src/server" with { type: "cf-worker" };
 const env = process.env;
 const workerName = env.WORKER_NAME?.trim() || "worker-name-placeholder";
 const queueName = env.QUEUE_NAME?.trim() || "queue-name-placeholder";
-const bucketName = env.BUCKET_NAME?.trim() || "bucket-name-placeholder";
+const imageHostConfig = env.IMAGE_HOST_CONFIG?.trim() ?? "";
+const imageStorageDriver =
+  env.IMAGE_STORAGE_DRIVER?.trim() || "nature,xingye,chatglm";
 const d1DatabaseId =
   env.D1_DATABASE_ID?.trim() || "00000000-0000-4000-8000-000000000000";
 const kvNamespaceId =
@@ -58,8 +60,10 @@ export default defineConfig((ctx) => {
       env: {
         DB: bindings.d1({ id: d1DatabaseId }),
         KV: bindings.kv({ id: kvNamespaceId }),
-        R2: bindings.r2({ name: bucketName }),
         QUEUE: bindings.queue({ name: queueName }),
+        // 免费图床链：未配置时默认 nature/xingye/chatglm（免凭据）
+        IMAGE_HOST_CONFIG: bindings.text(imageHostConfig),
+        IMAGE_STORAGE_DRIVER: bindings.text(imageStorageDriver),
       },
       // Durable Objects are reached through `exports` from `cloudflare:workers`,
       // so they need no binding. Once deployed this way, rolling back to a
