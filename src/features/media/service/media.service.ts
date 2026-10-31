@@ -47,7 +47,8 @@ export async function upload(
   const width = dimensions?.width;
   const height = dimensions?.height;
 
-  const uploaded = await Storage.putToR2(context.env, file);
+  // 图片存储走免费图床链（替换 R2），返回的 key/url 即图床公开 URL
+  const uploaded = await Storage.uploadImage(context.env, file);
 
   try {
     const mediaRecord = await MediaRepo.insertMedia(context.db, {
@@ -65,23 +66,24 @@ export async function upload(
   } catch (error) {
     console.error(
       JSON.stringify({
-        message: "media db insert failed, rolling back r2 upload",
+        message: "media db insert failed, rolling back upload",
         key: uploaded.key,
         error: error instanceof Error ? error.message : String(error),
       }),
     );
     context.executionCtx.waitUntil(
-      Storage.deleteFromR2(context.env, uploaded.key).catch((rollbackError) =>
-        console.error(
-          JSON.stringify({
-            message: "r2 rollback delete failed",
-            key: uploaded.key,
-            error:
-              rollbackError instanceof Error
-                ? rollbackError.message
-                : String(rollbackError),
-          }),
-        ),
+      Storage.deleteImageStorage(context.env, uploaded.key).catch(
+        (rollbackError) =>
+          console.error(
+            JSON.stringify({
+              message: "upload rollback delete failed",
+              key: uploaded.key,
+              error:
+                rollbackError instanceof Error
+                  ? rollbackError.message
+                  : String(rollbackError),
+            }),
+          ),
       ),
     );
     return err({ reason: "MEDIA_RECORD_CREATE_FAILED" });
@@ -100,10 +102,10 @@ export async function deleteImage(
       : err({ reason: "MEDIA_NOT_FOUND" });
   }
   context.executionCtx.waitUntil(
-    Storage.deleteFromR2(context.env, key).catch((deleteError) =>
+    Storage.deleteImageStorage(context.env, key).catch((deleteError) =>
       console.error(
         JSON.stringify({
-          message: "r2 delete failed",
+          message: "image delete failed",
           key,
           error:
             deleteError instanceof Error
@@ -126,10 +128,6 @@ export async function getMediaList(
 
 export async function isMediaInUse(context: DbContext, key: string) {
   return await PostMediaRepo.isMediaInUse(context.db, key);
-}
-
-export async function mediaExists(context: DbContext, key: string) {
-  return (await MediaRepo.findMediaByKey(context.db, key)) !== null;
 }
 
 export async function getLinkedPosts(context: DbContext, key: string) {
@@ -173,6 +171,8 @@ export async function updateMediaName(
  * public pages and editor alike, serves the new file from then on. The new
  * file must be the same image type: the key's extension and the content type
  * served at it would otherwise disagree.
+ *
+ * R2 已移除：替换为重新上传到免费图床链，返回新的外部公开 URL。
  */
 export async function replaceImage(
   context: DbContext & { executionCtx: ExecutionContext },
@@ -191,10 +191,9 @@ export async function replaceImage(
     return mediaInvalid("TYPE_CHANGED");
   }
   const dimensions = getImageDimensions(buffer);
-  await Storage.putToR2(context.env, input.file, input.key);
-  // Only the Media record's own address changes, so a page that already
-  // shows it (the media library) loads the new file instead of its copy.
-  const url = `${getOriginalImageUrl(input.key)}?v=${Date.now()}`;
+  const uploaded = await Storage.uploadImage(context.env, input.file);
+  // 图片走免费图床链，每次返回新的外部公开 URL
+  const url = `${uploaded.url}?v=${Date.now()}`;
   const updated = await MediaRepo.updateMediaFile(context.db, input.key, {
     url,
     fileName: cleanMediaName(input.file.name) || existing.fileName,
@@ -216,10 +215,10 @@ export async function deleteUnused(
   const keys = await MediaRepo.deleteUnusedMedia(context.db);
   for (const key of keys) {
     context.executionCtx.waitUntil(
-      Storage.deleteFromR2(context.env, key).catch((deleteError) =>
+      Storage.deleteImageStorage(context.env, key).catch((deleteError) =>
         console.error(
           JSON.stringify({
-            message: "r2 delete failed",
+            message: "image delete failed",
             key,
             error:
               deleteError instanceof Error
@@ -323,126 +322,17 @@ function withImageHeaders(
   return response;
 }
 
+/**
+ * R2 存储已移除：用户图片与站点资源均存储在外部免费图床，直接以公开 URL 访问，
+ * 不再经过 /images/{key} 代理。若 key 本身是外部 URL，直接重定向；否则 404。
+ */
 export async function handleImageRequest(
-  env: Env,
+  _env: Env,
   key: string,
-  request: Request,
+  _request: Request,
 ) {
-  const url = new URL(request.url);
-  const searchParams = url.searchParams;
-
-  const serveOriginal = async () => {
-    const object = await env.R2.get(key);
-    if (!object) {
-      return withImageHeaders(
-        new Response("Image not found", { status: 404 }),
-        {},
-      );
-    }
-
-    const contentType =
-      object.httpMetadata?.contentType ||
-      getContentTypeFromKey(key) ||
-      "application/octet-stream";
-
-    const headers = new Headers();
-    object.writeHttpMetadata(headers);
-    headers.set("Content-Type", contentType);
-    headers.set("ETag", object.httpEtag);
-
-    return withImageHeaders(
-      new Response(object.body, { headers }),
-      CACHE_CONTROL.public,
-    );
-  };
-
-  // 1. 防止循环调用 & 显式请求原图
-  const viaHeader = request.headers.get("via");
-  const isLoop = viaHeader && /image-resizing/.test(viaHeader);
-  const wantsOriginal = searchParams.get("original") === "true";
-
-  const isLocalDev =
-    url.hostname === "localhost" || url.hostname === "127.0.0.1";
-
-  // Miniflare's local Image Resizing encodes AVIF extremely slowly (~30s for a
-  // ~1MB hero image). Serve the R2 original in local dev; production still
-  // goes through Cloudflare Image Resizing.
-  // 2. 构建 Cloudflare Image Resizing 参数（只接受允许的宽度，其余返回原图）
-  const transformOptions = parseImageTransform(
-    searchParams,
-    request.headers.get("Accept") || "",
-  );
-  if (
-    isLoop ||
-    wantsOriginal ||
-    isLocalDev ||
-    isGifKey(key) ||
-    !transformOptions
-  ) {
-    return await serveOriginal();
+  if (key.startsWith("http://") || key.startsWith("https://")) {
+    return Response.redirect(key, 302);
   }
-
-  // 3. 尝试进行图片处理
-  try {
-    // The transform names the stored file's version, so a replaced file is
-    // transformed afresh; this read runs only when the edge has no copy.
-    const stored = await env.R2.head(key);
-    if (!stored) {
-      return await serveOriginal();
-    }
-    const sourceImageUrl = getTransformSourceUrl(url, key, stored.etag);
-
-    const subRequestHeaders = new Headers();
-
-    const headersToKeep = ["user-agent", "accept"];
-    for (const [k, v] of request.headers.entries()) {
-      if (headersToKeep.includes(k.toLowerCase())) {
-        subRequestHeaders.set(k, v);
-      }
-    }
-
-    const imageRequest = new Request(sourceImageUrl, {
-      headers: subRequestHeaders,
-    });
-
-    // 调用 Cloudflare Images 变换
-    const response = await fetch(imageRequest, {
-      cf: { image: transformOptions },
-    });
-
-    // 如果变换失败 (如格式不支持)，降级回原图
-    if (!response.ok) {
-      console.error(
-        JSON.stringify({
-          message: "image transform failed",
-          key,
-          status: response.status,
-          statusText: response.statusText,
-        }),
-      );
-      return await serveOriginal();
-    }
-
-    // 4. 返回处理后的图片
-    // 使用 new Response(response.body, response) 保持状态码和其它优化头信息
-    const newResponse = new Response(response.body, response);
-
-    newResponse.headers.set("Vary", "Accept");
-    // Browsers revalidate (the address outlives a replaced file); the tag
-    // lets a revalidation of an unchanged variant answer without a body.
-    newResponse.headers.set(
-      "ETag",
-      `"${stored.etag}-${transformOptions.width}-${transformOptions.format ?? "auto"}"`,
-    );
-    return withImageHeaders(newResponse, CACHE_CONTROL.media);
-  } catch (e) {
-    console.error(
-      JSON.stringify({
-        message: "image transform error",
-        key,
-        error: e instanceof Error ? e.message : String(e),
-      }),
-    );
-    return await serveOriginal();
-  }
+  return new Response("Image not found", { status: 404 });
 }
