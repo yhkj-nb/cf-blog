@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="云痕科技">
+  <title>云痕科技</title>
+  <defs>
+    <linearGradient id="silver" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.35" stop-color="#eaf3fb"/>
+      <stop offset="0.62" stop-color="#8ea7c0"/>
+      <stop offset="0.85" stop-color="#d7e6f2"/>
+      <stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a3fc4"/>
+      <stop offset="0.5" stop-color="#0d6cf0"/>
+      <stop offset="1" stop-color="#2a9bff"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="0" y1="0.2" x2="1" y2="1">
+      <stop offset="0" stop-color="#0084f5"/>
+      <stop offset="0.45" stop-color="#00b9ff"/>
+      <stop offset="1" stop-color="#2ceaff"/>
+    </linearGradient>
+    <linearGradient id="blue2" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#12d5ff"/>
+      <stop offset="0.5" stop-color="#00a2ff"/>
+      <stop offset="1" stop-color="#0a5fe0"/>
+    </linearGradient>
+    <linearGradient id="beamg" x1="0" y1="0" x2="1" y2="0.3">
+      <stop offset="0" stop-color="#f4fbff"/>
+      <stop offset="0.4" stop-color="#c2d6e6"/>
+      <stop offset="0.7" stop-color="#7e97b0"/>
+      <stop offset="1" stop-color="#e8f4ff"/>
+    </linearGradient>
+    <radialGradient id="bg" cx="0.5" cy="0.4" r="0.78">
+      <stop offset="0" stop-color="#071026"/>
+      <stop offset="0.55" stop-color="#03060f"/>
+      <stop offset="1" stop-color="#000000"/>
+    </radialGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.2"/>
+    </filter>
+    <clipPath id="outerClip"><path d="M 227.58,80.14 Q 256.00,52.00 284.42,80.14 L 429.58,223.86 Q 458.00,252.00 429.86,280.42 L 284.14,427.58 Q 256.00,456.00 227.86,427.58 L 82.14,280.42 Q 54.00,252.00 82.42,223.86 L 227.58,80.14 Z"/></clipPath>
+    <clipPath id="round"><rect width="512" height="512" rx="88"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#round)">
+    <rect width="512" height="512" fill="url(#bg)"/>
+
+    <!-- 蓝色外发光 -->
+    <path d="M 227.58,80.14 Q 256.00,52.00 284.42,80.14 L 429.58,223.86 Q 458.00,252.00 429.86,280.42 L 284.14,427.58 Q 256.00,456.00 227.86,427.58 L 82.14,280.42 Q 54.00,252.00 82.42,223.86 L 227.58,80.14 Z" fill="#0a86ff" opacity="0.72" filter="url(#glow)"/>
+    <path d="M 227.58,80.14 Q 256.00,52.00 284.42,80.14 L 429.58,223.86 Q 458.00,252.00 429.86,280.42 L 284.14,427.58 Q 256.00,456.00 227.86,427.58 L 82.14,280.42 Q 54.00,252.00 82.42,223.86 L 227.58,80.14 Z" fill="none" stroke="#39c6ff" stroke-width="22"
+          opacity="0.45" filter="url(#glow)"/>
+    <path d="M 227.58,80.14 Q 256.00,52.00 284.42,80.14 L 429.58,223.86 Q 458.00,252.00 429.86,280.42 L 284.14,427.58 Q 256.00,456.00 227.86,427.58 L 82.14,280.42 Q 54.00,252.00 82.42,223.86 L 227.58,80.14 Z" fill="none" stroke="#7ad9ff" stroke-width="8"
+          opacity="0.35" filter="url(#glow)"/>
+
+    <!-- 折带四段 -->
+    <g clip-path="url(#outerClip)">
+      <path d="M 54,252 L 256,52 L 256,166 L 138,258 Z" fill="url(#silver)"/>
+      <path d="M 256,52 L 458,252 L 374,258 L 256,166 Z" fill="url(#blue)"/>
+      <path d="M 458,252 L 256,456 L 256,362 L 374,258 Z" fill="url(#cyan)"/>
+      <path d="M 256,456 L 54,252 L 138,258 L 256,362 Z" fill="url(#blue2)"/>
+    </g>
+
+    <!-- 外轮廓高光描边 -->
+    <path d="M 227.58,80.14 Q 256.00,52.00 284.42,80.14 L 429.58,223.86 Q 458.00,252.00 429.86,280.42 L 284.14,427.58 Q 256.00,456.00 227.86,427.58 L 82.14,280.42 Q 54.00,252.00 82.42,223.86 L 227.58,80.14 Z" fill="none" stroke="#8fd8ff" stroke-width="3" opacity="0.75"/>
+
+    <!-- 中央负空间（黑色菱形） -->
+    <path d="M 256,166 L 374,258 L 256,362 L 138,258 Z" fill="#040a18"/>
+    <path d="M 256,166 L 374,258 L 256,362 L 138,258 Z" fill="none" stroke="#003a7a" stroke-width="2" opacity="0.6"/>
+
+    <!-- 立体折叠银白斜梁 -->
+    <path d="M 232,66 L 274,60 L 342,330 L 300,346 Z" fill="url(#beamg)" opacity="0.96" filter="url(#soft)"/>
+    <path d="M 232,66 L 274,60 L 342,330 L 300,346 Z" fill="url(#beamg)" opacity="0.9"/>
+  </g>
+</svg>
