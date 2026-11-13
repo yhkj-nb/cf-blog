@@ -187,6 +187,7 @@ describe("errors declared by tag, category and media operations", () => {
     ],
     ["patch", "/admin/media/{key}", ["404 MEDIA_NOT_FOUND"]],
     ["get", "/admin/media/{key}/posts", ["404 MEDIA_NOT_FOUND"]],
+    ["get", "/admin/media/{key}/moments", ["404 MEDIA_NOT_FOUND"]],
     [
       "post",
       "/admin/media/{key}/replace",
@@ -222,6 +223,9 @@ describe("rate limit and Turnstile errors", () => {
 
   it("is declared by the public operations that run the middleware", () => {
     expect(declaredErrors("post", "/posts/{postId}/comments")).toEqual(
+      expect.arrayContaining(["400 TURNSTILE_FAILED", "429 RATE_LIMITED"]),
+    );
+    expect(declaredErrors("post", "/moments/{momentId}/comments")).toEqual(
       expect.arrayContaining(["400 TURNSTILE_FAILED", "429 RATE_LIMITED"]),
     );
     expect(declaredErrors("delete", "/comments/{id}")).toContain(

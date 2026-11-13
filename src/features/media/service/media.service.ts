@@ -28,6 +28,7 @@ import * as PostMediaRepo from "@/features/posts/data/post-media.data";
 import { CACHE_CONTROL } from "@/lib/constants";
 import { fetchPublicUrl } from "@/lib/http/public-fetch";
 import { err, ok } from "@/lib/errors";
+import { momentHeading } from "@/features/moments/utils/moment-heading";
 
 function mediaInvalid(detail: MediaInvalidDetail) {
   return err({ reason: "MEDIA_INVALID" as const, detail });
@@ -335,4 +336,19 @@ export async function handleImageRequest(
     return Response.redirect(key, 302);
   }
   return new Response("Image not found", { status: 404 });
+}
+
+
+export async function mediaExists(context: DbContext, key: string) {
+  return (await MediaRepo.findMediaByKey(context.db, key)) !== null;
+}
+
+export async function getLinkedMoments(context: DbContext, key: string) {
+  const moments = await MediaRepo.getMomentsByMediaKey(context.db, key);
+  // A Moment with images has no video, so a blank text is an image Moment.
+  return moments.map((moment) => ({
+    id: moment.id,
+    title: momentHeading({ text: moment.text, hasVideo: false }),
+    postedAt: moment.postedAt,
+  }));
 }
