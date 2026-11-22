@@ -28,8 +28,13 @@ import { Route as PublicSearchRouteImport } from './routes/_public/search'
 import { Route as PublicUnsubscribeRouteImport } from './routes/_public/unsubscribe'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminSplatRouteImport } from './routes/admin/$'
+import { Route as AdminAccessRouteRouteImport } from './routes/admin/access/route'
+import { Route as AdminCommentsRouteImport } from './routes/admin/comments'
+import { Route as AdminMutedUsersRouteImport } from './routes/admin/muted-users'
+import { Route as AdminPersonalizeRouteImport } from './routes/admin/personalize'
 import { Route as AdminPostsRouteRouteImport } from './routes/admin/posts/route'
 import { Route as AdminSettingsRouteRouteImport } from './routes/admin/settings/route'
+import { Route as AdminTaxonomyRouteImport } from './routes/admin/taxonomy'
 import { Route as ApiSplatRouteImport } from './routes/api.$'
 import { Route as ApiAuthRouteImport } from './routes/api.auth'
 import { Route as ApiSendRouteImport } from './routes/api.send'
@@ -47,14 +52,14 @@ import { Route as PublicUserSubmitFriendLinkRouteImport } from './routes/_public
 import { Route as PublicMomentsIndexRouteImport } from './routes/_public/moments/index'
 import { Route as PublicMomentsIdRouteImport } from './routes/_public/moments/$id'
 import { Route as PublicPostSlugRouteImport } from './routes/_public/post/$slug'
+import { Route as AdminAccessIndexRouteImport } from './routes/admin/access/index'
+import { Route as AdminAccessAgentSkillRouteImport } from './routes/admin/access/agent-skill'
+import { Route as AdminAccessApiKeysRouteImport } from './routes/admin/access/api-keys'
 import { Route as AdminFriendLinksIndexRouteImport } from './routes/admin/friend-links/index'
 import { Route as AdminMediaIndexRouteImport } from './routes/admin/media/index'
 import { Route as AdminPostsIndexRouteImport } from './routes/admin/posts/index'
 import { Route as AdminSettingsIndexRouteImport } from './routes/admin/settings/index'
-import { Route as AdminSettingsAgentSkillRouteImport } from './routes/admin/settings/agent-skill'
-import { Route as AdminSettingsApiKeysRouteImport } from './routes/admin/settings/api-keys'
 import { Route as AdminSettingsMaintenanceRouteImport } from './routes/admin/settings/maintenance'
-import { Route as AdminSettingsMutedUsersRouteImport } from './routes/admin/settings/muted-users'
 import { Route as AdminSettingsNotificationsRouteImport } from './routes/admin/settings/notifications'
 import { Route as AdminSettingsSiteRouteImport } from './routes/admin/settings/site'
 import { Route as ApiAuthSplatRouteImport } from './routes/api.auth.$'
@@ -155,6 +160,26 @@ const AdminSplatRoute = AdminSplatRouteImport.update({
   path: '/$',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const AdminAccessRouteRoute = AdminAccessRouteRouteImport.update({
+  id: '/access',
+  path: '/access',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminCommentsRoute = AdminCommentsRouteImport.update({
+  id: '/comments',
+  path: '/comments',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminMutedUsersRoute = AdminMutedUsersRouteImport.update({
+  id: '/muted-users',
+  path: '/muted-users',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminPersonalizeRoute = AdminPersonalizeRouteImport.update({
+  id: '/personalize',
+  path: '/personalize',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 const AdminPostsRouteRoute = AdminPostsRouteRouteImport.update({
   id: '/posts',
   path: '/posts',
@@ -163,6 +188,11 @@ const AdminPostsRouteRoute = AdminPostsRouteRouteImport.update({
 const AdminSettingsRouteRoute = AdminSettingsRouteRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminTaxonomyRoute = AdminTaxonomyRouteImport.update({
+  id: '/taxonomy',
+  path: '/taxonomy',
   getParentRoute: () => AdminRouteRoute,
 } as any)
 const ApiSplatRoute = ApiSplatRouteImport.update({
@@ -252,6 +282,21 @@ const PublicPostSlugRoute = PublicPostSlugRouteImport.update({
   path: '/post/$slug',
   getParentRoute: () => PublicRouteRoute,
 } as any)
+const AdminAccessIndexRoute = AdminAccessIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminAccessRouteRoute,
+} as any)
+const AdminAccessAgentSkillRoute = AdminAccessAgentSkillRouteImport.update({
+  id: '/agent-skill',
+  path: '/agent-skill',
+  getParentRoute: () => AdminAccessRouteRoute,
+} as any)
+const AdminAccessApiKeysRoute = AdminAccessApiKeysRouteImport.update({
+  id: '/api-keys',
+  path: '/api-keys',
+  getParentRoute: () => AdminAccessRouteRoute,
+} as any)
 const AdminFriendLinksIndexRoute = AdminFriendLinksIndexRouteImport.update({
   id: '/friend-links/',
   path: '/friend-links/',
@@ -272,27 +317,12 @@ const AdminSettingsIndexRoute = AdminSettingsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminSettingsRouteRoute,
 } as any)
-const AdminSettingsAgentSkillRoute = AdminSettingsAgentSkillRouteImport.update({
-  id: '/agent-skill',
-  path: '/agent-skill',
-  getParentRoute: () => AdminSettingsRouteRoute,
-} as any)
-const AdminSettingsApiKeysRoute = AdminSettingsApiKeysRouteImport.update({
-  id: '/api-keys',
-  path: '/api-keys',
-  getParentRoute: () => AdminSettingsRouteRoute,
-} as any)
 const AdminSettingsMaintenanceRoute =
   AdminSettingsMaintenanceRouteImport.update({
     id: '/maintenance',
     path: '/maintenance',
     getParentRoute: () => AdminSettingsRouteRoute,
   } as any)
-const AdminSettingsMutedUsersRoute = AdminSettingsMutedUsersRouteImport.update({
-  id: '/muted-users',
-  path: '/muted-users',
-  getParentRoute: () => AdminSettingsRouteRoute,
-} as any)
 const AdminSettingsNotificationsRoute =
   AdminSettingsNotificationsRouteImport.update({
     id: '/notifications',
@@ -341,6 +371,7 @@ export interface FileRoutesByFullPath {
   '/site.webmanifest': typeof SiteDotwebmanifestRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/stats.js': typeof StatsDotjsRoute
+  '/admin/access': typeof AdminAccessRouteRouteWithChildren
   '/admin/posts': typeof AdminPostsRouteRouteWithChildren
   '/admin/settings': typeof AdminSettingsRouteRouteWithChildren
   '/$': typeof PublicSplatRoute
@@ -349,6 +380,10 @@ export interface FileRoutesByFullPath {
   '/search': typeof PublicSearchRoute
   '/unsubscribe': typeof PublicUnsubscribeRoute
   '/admin/$': typeof AdminSplatRoute
+  '/admin/comments': typeof AdminCommentsRoute
+  '/admin/muted-users': typeof AdminMutedUsersRoute
+  '/admin/personalize': typeof AdminPersonalizeRoute
+  '/admin/taxonomy': typeof AdminTaxonomyRoute
   '/api/$': typeof ApiSplatRoute
   '/api/auth': typeof ApiAuthRouteWithChildren
   '/api/send': typeof ApiSendRoute
@@ -366,14 +401,14 @@ export interface FileRoutesByFullPath {
   '/submit-friend-link': typeof PublicUserSubmitFriendLinkRoute
   '/moments/$id': typeof PublicMomentsIdRoute
   '/post/$slug': typeof PublicPostSlugRoute
-  '/admin/settings/agent-skill': typeof AdminSettingsAgentSkillRoute
-  '/admin/settings/api-keys': typeof AdminSettingsApiKeysRoute
+  '/admin/access/agent-skill': typeof AdminAccessAgentSkillRoute
+  '/admin/access/api-keys': typeof AdminAccessApiKeysRoute
   '/admin/settings/maintenance': typeof AdminSettingsMaintenanceRoute
-  '/admin/settings/muted-users': typeof AdminSettingsMutedUsersRoute
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
   '/admin/settings/site': typeof AdminSettingsSiteRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/moments/': typeof PublicMomentsIndexRoute
+  '/admin/access/': typeof AdminAccessIndexRoute
   '/admin/friend-links/': typeof AdminFriendLinksIndexRoute
   '/admin/media/': typeof AdminMediaIndexRoute
   '/admin/posts/': typeof AdminPostsIndexRoute
@@ -398,6 +433,10 @@ export interface FileRoutesByTo {
   '/search': typeof PublicSearchRoute
   '/unsubscribe': typeof PublicUnsubscribeRoute
   '/admin/$': typeof AdminSplatRoute
+  '/admin/comments': typeof AdminCommentsRoute
+  '/admin/muted-users': typeof AdminMutedUsersRoute
+  '/admin/personalize': typeof AdminPersonalizeRoute
+  '/admin/taxonomy': typeof AdminTaxonomyRoute
   '/api/$': typeof ApiSplatRoute
   '/api/auth': typeof ApiAuthRouteWithChildren
   '/api/send': typeof ApiSendRoute
@@ -415,14 +454,14 @@ export interface FileRoutesByTo {
   '/submit-friend-link': typeof PublicUserSubmitFriendLinkRoute
   '/moments/$id': typeof PublicMomentsIdRoute
   '/post/$slug': typeof PublicPostSlugRoute
-  '/admin/settings/agent-skill': typeof AdminSettingsAgentSkillRoute
-  '/admin/settings/api-keys': typeof AdminSettingsApiKeysRoute
+  '/admin/access/agent-skill': typeof AdminAccessAgentSkillRoute
+  '/admin/access/api-keys': typeof AdminAccessApiKeysRoute
   '/admin/settings/maintenance': typeof AdminSettingsMaintenanceRoute
-  '/admin/settings/muted-users': typeof AdminSettingsMutedUsersRoute
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
   '/admin/settings/site': typeof AdminSettingsSiteRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/moments': typeof PublicMomentsIndexRoute
+  '/admin/access': typeof AdminAccessIndexRoute
   '/admin/friend-links': typeof AdminFriendLinksIndexRoute
   '/admin/media': typeof AdminMediaIndexRoute
   '/admin/posts': typeof AdminPostsIndexRoute
@@ -444,6 +483,7 @@ export interface FileRoutesById {
   '/stats.js': typeof StatsDotjsRoute
   '/_public/_auth': typeof PublicAuthRouteRouteWithChildren
   '/_public/_user': typeof PublicUserRouteRouteWithChildren
+  '/admin/access': typeof AdminAccessRouteRouteWithChildren
   '/admin/posts': typeof AdminPostsRouteRouteWithChildren
   '/admin/settings': typeof AdminSettingsRouteRouteWithChildren
   '/_public/$': typeof PublicSplatRoute
@@ -452,6 +492,10 @@ export interface FileRoutesById {
   '/_public/search': typeof PublicSearchRoute
   '/_public/unsubscribe': typeof PublicUnsubscribeRoute
   '/admin/$': typeof AdminSplatRoute
+  '/admin/comments': typeof AdminCommentsRoute
+  '/admin/muted-users': typeof AdminMutedUsersRoute
+  '/admin/personalize': typeof AdminPersonalizeRoute
+  '/admin/taxonomy': typeof AdminTaxonomyRoute
   '/api/$': typeof ApiSplatRoute
   '/api/auth': typeof ApiAuthRouteWithChildren
   '/api/send': typeof ApiSendRoute
@@ -470,14 +514,14 @@ export interface FileRoutesById {
   '/_public/_user/submit-friend-link': typeof PublicUserSubmitFriendLinkRoute
   '/_public/moments/$id': typeof PublicMomentsIdRoute
   '/_public/post/$slug': typeof PublicPostSlugRoute
-  '/admin/settings/agent-skill': typeof AdminSettingsAgentSkillRoute
-  '/admin/settings/api-keys': typeof AdminSettingsApiKeysRoute
+  '/admin/access/agent-skill': typeof AdminAccessAgentSkillRoute
+  '/admin/access/api-keys': typeof AdminAccessApiKeysRoute
   '/admin/settings/maintenance': typeof AdminSettingsMaintenanceRoute
-  '/admin/settings/muted-users': typeof AdminSettingsMutedUsersRoute
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
   '/admin/settings/site': typeof AdminSettingsSiteRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/_public/moments/': typeof PublicMomentsIndexRoute
+  '/admin/access/': typeof AdminAccessIndexRoute
   '/admin/friend-links/': typeof AdminFriendLinksIndexRoute
   '/admin/media/': typeof AdminMediaIndexRoute
   '/admin/posts/': typeof AdminPostsIndexRoute
@@ -499,6 +543,7 @@ export interface FileRouteTypes {
     | '/site.webmanifest'
     | '/sitemap.xml'
     | '/stats.js'
+    | '/admin/access'
     | '/admin/posts'
     | '/admin/settings'
     | '/$'
@@ -507,6 +552,10 @@ export interface FileRouteTypes {
     | '/search'
     | '/unsubscribe'
     | '/admin/$'
+    | '/admin/comments'
+    | '/admin/muted-users'
+    | '/admin/personalize'
+    | '/admin/taxonomy'
     | '/api/$'
     | '/api/auth'
     | '/api/send'
@@ -524,14 +573,14 @@ export interface FileRouteTypes {
     | '/submit-friend-link'
     | '/moments/$id'
     | '/post/$slug'
-    | '/admin/settings/agent-skill'
-    | '/admin/settings/api-keys'
+    | '/admin/access/agent-skill'
+    | '/admin/access/api-keys'
     | '/admin/settings/maintenance'
-    | '/admin/settings/muted-users'
     | '/admin/settings/notifications'
     | '/admin/settings/site'
     | '/api/auth/$'
     | '/moments/'
+    | '/admin/access/'
     | '/admin/friend-links/'
     | '/admin/media/'
     | '/admin/posts/'
@@ -556,6 +605,10 @@ export interface FileRouteTypes {
     | '/search'
     | '/unsubscribe'
     | '/admin/$'
+    | '/admin/comments'
+    | '/admin/muted-users'
+    | '/admin/personalize'
+    | '/admin/taxonomy'
     | '/api/$'
     | '/api/auth'
     | '/api/send'
@@ -573,14 +626,14 @@ export interface FileRouteTypes {
     | '/submit-friend-link'
     | '/moments/$id'
     | '/post/$slug'
-    | '/admin/settings/agent-skill'
-    | '/admin/settings/api-keys'
+    | '/admin/access/agent-skill'
+    | '/admin/access/api-keys'
     | '/admin/settings/maintenance'
-    | '/admin/settings/muted-users'
     | '/admin/settings/notifications'
     | '/admin/settings/site'
     | '/api/auth/$'
     | '/moments'
+    | '/admin/access'
     | '/admin/friend-links'
     | '/admin/media'
     | '/admin/posts'
@@ -601,6 +654,7 @@ export interface FileRouteTypes {
     | '/stats.js'
     | '/_public/_auth'
     | '/_public/_user'
+    | '/admin/access'
     | '/admin/posts'
     | '/admin/settings'
     | '/_public/$'
@@ -609,6 +663,10 @@ export interface FileRouteTypes {
     | '/_public/search'
     | '/_public/unsubscribe'
     | '/admin/$'
+    | '/admin/comments'
+    | '/admin/muted-users'
+    | '/admin/personalize'
+    | '/admin/taxonomy'
     | '/api/$'
     | '/api/auth'
     | '/api/send'
@@ -627,14 +685,14 @@ export interface FileRouteTypes {
     | '/_public/_user/submit-friend-link'
     | '/_public/moments/$id'
     | '/_public/post/$slug'
-    | '/admin/settings/agent-skill'
-    | '/admin/settings/api-keys'
+    | '/admin/access/agent-skill'
+    | '/admin/access/api-keys'
     | '/admin/settings/maintenance'
-    | '/admin/settings/muted-users'
     | '/admin/settings/notifications'
     | '/admin/settings/site'
     | '/api/auth/$'
     | '/_public/moments/'
+    | '/admin/access/'
     | '/admin/friend-links/'
     | '/admin/media/'
     | '/admin/posts/'
@@ -799,6 +857,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSplatRouteImport
       parentRoute: typeof AdminRouteRoute
     }
+    '/admin/access': {
+      id: '/admin/access'
+      path: '/access'
+      fullPath: '/admin/access'
+      preLoaderRoute: typeof AdminAccessRouteRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/comments': {
+      id: '/admin/comments'
+      path: '/comments'
+      fullPath: '/admin/comments'
+      preLoaderRoute: typeof AdminCommentsRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/muted-users': {
+      id: '/admin/muted-users'
+      path: '/muted-users'
+      fullPath: '/admin/muted-users'
+      preLoaderRoute: typeof AdminMutedUsersRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/personalize': {
+      id: '/admin/personalize'
+      path: '/personalize'
+      fullPath: '/admin/personalize'
+      preLoaderRoute: typeof AdminPersonalizeRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/admin/posts': {
       id: '/admin/posts'
       path: '/posts'
@@ -811,6 +897,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/admin/settings'
       preLoaderRoute: typeof AdminSettingsRouteRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/taxonomy': {
+      id: '/admin/taxonomy'
+      path: '/taxonomy'
+      fullPath: '/admin/taxonomy'
+      preLoaderRoute: typeof AdminTaxonomyRouteImport
       parentRoute: typeof AdminRouteRoute
     }
     '/api/$': {
@@ -932,6 +1025,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PublicPostSlugRouteImport
       parentRoute: typeof PublicRouteRoute
     }
+    '/admin/access/': {
+      id: '/admin/access/'
+      path: '/'
+      fullPath: '/admin/access/'
+      preLoaderRoute: typeof AdminAccessIndexRouteImport
+      parentRoute: typeof AdminAccessRouteRoute
+    }
+    '/admin/access/agent-skill': {
+      id: '/admin/access/agent-skill'
+      path: '/agent-skill'
+      fullPath: '/admin/access/agent-skill'
+      preLoaderRoute: typeof AdminAccessAgentSkillRouteImport
+      parentRoute: typeof AdminAccessRouteRoute
+    }
+    '/admin/access/api-keys': {
+      id: '/admin/access/api-keys'
+      path: '/api-keys'
+      fullPath: '/admin/access/api-keys'
+      preLoaderRoute: typeof AdminAccessApiKeysRouteImport
+      parentRoute: typeof AdminAccessRouteRoute
+    }
     '/admin/friend-links/': {
       id: '/admin/friend-links/'
       path: '/friend-links'
@@ -960,32 +1074,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsIndexRouteImport
       parentRoute: typeof AdminSettingsRouteRoute
     }
-    '/admin/settings/agent-skill': {
-      id: '/admin/settings/agent-skill'
-      path: '/agent-skill'
-      fullPath: '/admin/settings/agent-skill'
-      preLoaderRoute: typeof AdminSettingsAgentSkillRouteImport
-      parentRoute: typeof AdminSettingsRouteRoute
-    }
-    '/admin/settings/api-keys': {
-      id: '/admin/settings/api-keys'
-      path: '/api-keys'
-      fullPath: '/admin/settings/api-keys'
-      preLoaderRoute: typeof AdminSettingsApiKeysRouteImport
-      parentRoute: typeof AdminSettingsRouteRoute
-    }
     '/admin/settings/maintenance': {
       id: '/admin/settings/maintenance'
       path: '/maintenance'
       fullPath: '/admin/settings/maintenance'
       preLoaderRoute: typeof AdminSettingsMaintenanceRouteImport
-      parentRoute: typeof AdminSettingsRouteRoute
-    }
-    '/admin/settings/muted-users': {
-      id: '/admin/settings/muted-users'
-      path: '/muted-users'
-      fullPath: '/admin/settings/muted-users'
-      preLoaderRoute: typeof AdminSettingsMutedUsersRouteImport
       parentRoute: typeof AdminSettingsRouteRoute
     }
     '/admin/settings/notifications': {
@@ -1106,6 +1199,21 @@ const PublicRouteRouteWithChildren = PublicRouteRoute._addFileChildren(
   PublicRouteRouteChildren,
 )
 
+interface AdminAccessRouteRouteChildren {
+  AdminAccessAgentSkillRoute: typeof AdminAccessAgentSkillRoute
+  AdminAccessApiKeysRoute: typeof AdminAccessApiKeysRoute
+  AdminAccessIndexRoute: typeof AdminAccessIndexRoute
+}
+
+const AdminAccessRouteRouteChildren: AdminAccessRouteRouteChildren = {
+  AdminAccessAgentSkillRoute: AdminAccessAgentSkillRoute,
+  AdminAccessApiKeysRoute: AdminAccessApiKeysRoute,
+  AdminAccessIndexRoute: AdminAccessIndexRoute,
+}
+
+const AdminAccessRouteRouteWithChildren =
+  AdminAccessRouteRoute._addFileChildren(AdminAccessRouteRouteChildren)
+
 interface AdminPostsEditIdRouteRouteChildren {
   AdminPostsEditIdHistoryRoute: typeof AdminPostsEditIdHistoryRoute
   AdminPostsEditIdIndexRoute: typeof AdminPostsEditIdIndexRoute
@@ -1139,20 +1247,14 @@ const AdminPostsRouteRouteWithChildren = AdminPostsRouteRoute._addFileChildren(
 )
 
 interface AdminSettingsRouteRouteChildren {
-  AdminSettingsAgentSkillRoute: typeof AdminSettingsAgentSkillRoute
-  AdminSettingsApiKeysRoute: typeof AdminSettingsApiKeysRoute
   AdminSettingsMaintenanceRoute: typeof AdminSettingsMaintenanceRoute
-  AdminSettingsMutedUsersRoute: typeof AdminSettingsMutedUsersRoute
   AdminSettingsNotificationsRoute: typeof AdminSettingsNotificationsRoute
   AdminSettingsSiteRoute: typeof AdminSettingsSiteRoute
   AdminSettingsIndexRoute: typeof AdminSettingsIndexRoute
 }
 
 const AdminSettingsRouteRouteChildren: AdminSettingsRouteRouteChildren = {
-  AdminSettingsAgentSkillRoute: AdminSettingsAgentSkillRoute,
-  AdminSettingsApiKeysRoute: AdminSettingsApiKeysRoute,
   AdminSettingsMaintenanceRoute: AdminSettingsMaintenanceRoute,
-  AdminSettingsMutedUsersRoute: AdminSettingsMutedUsersRoute,
   AdminSettingsNotificationsRoute: AdminSettingsNotificationsRoute,
   AdminSettingsSiteRoute: AdminSettingsSiteRoute,
   AdminSettingsIndexRoute: AdminSettingsIndexRoute,
@@ -1162,18 +1264,28 @@ const AdminSettingsRouteRouteWithChildren =
   AdminSettingsRouteRoute._addFileChildren(AdminSettingsRouteRouteChildren)
 
 interface AdminRouteRouteChildren {
+  AdminAccessRouteRoute: typeof AdminAccessRouteRouteWithChildren
   AdminPostsRouteRoute: typeof AdminPostsRouteRouteWithChildren
   AdminSettingsRouteRoute: typeof AdminSettingsRouteRouteWithChildren
   AdminSplatRoute: typeof AdminSplatRoute
+  AdminCommentsRoute: typeof AdminCommentsRoute
+  AdminMutedUsersRoute: typeof AdminMutedUsersRoute
+  AdminPersonalizeRoute: typeof AdminPersonalizeRoute
+  AdminTaxonomyRoute: typeof AdminTaxonomyRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminFriendLinksIndexRoute: typeof AdminFriendLinksIndexRoute
   AdminMediaIndexRoute: typeof AdminMediaIndexRoute
 }
 
 const AdminRouteRouteChildren: AdminRouteRouteChildren = {
+  AdminAccessRouteRoute: AdminAccessRouteRouteWithChildren,
   AdminPostsRouteRoute: AdminPostsRouteRouteWithChildren,
   AdminSettingsRouteRoute: AdminSettingsRouteRouteWithChildren,
   AdminSplatRoute: AdminSplatRoute,
+  AdminCommentsRoute: AdminCommentsRoute,
+  AdminMutedUsersRoute: AdminMutedUsersRoute,
+  AdminPersonalizeRoute: AdminPersonalizeRoute,
+  AdminTaxonomyRoute: AdminTaxonomyRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminFriendLinksIndexRoute: AdminFriendLinksIndexRoute,
   AdminMediaIndexRoute: AdminMediaIndexRoute,

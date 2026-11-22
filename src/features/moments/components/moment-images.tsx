@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { m } from "@/paraglide/messages";
 
 const LINK_CLASS =
-  "relative block cursor-zoom-in select-none overflow-hidden rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--fuwari-primary)";
+  "relative block cursor-zoom-in select-none overflow-hidden rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--theme-accent)";
 
 /**
  * A Moment's images in a grid: one large keeping its ratio, two to four in
@@ -52,7 +52,7 @@ export function MomentImages({
           style={single.style}
           className={cn(
             LINK_CLASS,
-            "max-w-full rounded-xl bg-(--fuwari-btn-regular-bg)",
+            "max-w-full rounded-xl bg-(--theme-tonal-bg)",
             !single.known && "max-w-xl",
           )}
         >
@@ -76,7 +76,7 @@ export function MomentImages({
           )}
         >
           {images.slice(0, shown).map((image, index) => {
-            const displayWidth = columns === 2 ? 400 : 300;
+            const displayWidth = 400;
             const covered = more > 0 && index === shown - 1;
             return (
               <a

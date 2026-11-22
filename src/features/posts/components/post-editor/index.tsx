@@ -1,10 +1,9 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useBlocker, useNavigate } from "@tanstack/react-router";
 import type { JSONContent, Editor as TiptapEditor } from "@tiptap/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { CircleAlert } from "lucide-react";
-import { toast } from "sonner";
-import { useAdminChrome } from "@/components/admin/admin-chrome";
+import { toast } from "@/lib/toast";
 import { Editor } from "@/components/tiptap-editor";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
@@ -21,12 +20,14 @@ import {
 import { withoutControlCharacters } from "@/lib/unicode-text";
 import { m } from "@/paraglide/messages";
 import { useDeletePost } from "../post-manager/hooks";
-import { postStateOf, publishActionLabel } from "../post-state";
+import { postStateOf } from "../post-state";
 import { readPostListLocation } from "../post-manager/list-position";
-import { useAutoSave, usePostActions } from "./hooks";
+import { useAutoSave, usePostActions, usePostChanges } from "./hooks";
+import { PostEditorChangesDialog } from "./post-editor-changes-dialog";
 import { PostEditorHeader } from "./post-editor-header";
 import { PostEditorMetadata } from "./post-editor-metadata";
 import { PostEditorInfoPanel } from "./post-editor-info-panel";
+import { PostEditorOutline, PostEditorStats } from "./post-editor-outline";
 import { PostEditorSummary } from "./post-editor-summary";
 import { SLUG_TAKEN_ERROR } from "./post-editor.model";
 import type { PostEditorData, PostEditorProps } from "./types";
@@ -40,7 +41,6 @@ export function PostEditor({
 }: PostEditorProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { setPrimaryAction, setMobileTitle } = useAdminChrome();
   const [infoOpen, setInfoOpen] = useState(false);
   const closeInfo = useCallback(() => setInfoOpen(false), []);
   const [post, setPost] = useState<PostEditorData>(() => ({
@@ -63,6 +63,8 @@ export function PostEditor({
   const [editorRenderKey] = useState(`editor:${initialData.id}`);
 
   const editorRef = useRef<TiptapEditor | null>(null);
+  // The same editor as state, for what is drawn from the document.
+  const [liveEditor, setLiveEditor] = useState<TiptapEditor | null>(null);
   const editorContentRef = useRef(editorContent);
   editorContentRef.current = editorContent;
 
@@ -171,8 +173,19 @@ export function PostEditor({
     reload: reloadLatest,
   });
 
+  const {
+    open: changesOpen,
+    changes,
+    show: showChanges,
+    close: closeChanges,
+  } = usePostChanges({ postId: initialData.id, flush });
+  const changesTriggerRef = useRef<HTMLElement | null>(null);
+  const slugWithheld =
+    !isValidPostSlug(post.slug) || saveError === SLUG_TAKEN_ERROR;
+
   const handleEditorCreated = useCallback((editor: TiptapEditor | null) => {
     editorRef.current = editor;
+    setLiveEditor(editor);
   }, []);
 
   const handleEditorUpdate = useCallback(() => {
@@ -216,46 +229,6 @@ export function PostEditor({
     });
   }, [flush, initialData.id, navigate, queryClient]);
 
-  const publishRef = useRef(handlePublish);
-  publishRef.current = handlePublish;
-
-  useEffect(() => {
-    if (infoOpen) {
-      setMobileTitle(m.editor_info_title());
-      setPrimaryAction({
-        label: m.editor_info_done(),
-        onClick: () => setInfoOpen(false),
-      });
-    } else {
-      setMobileTitle(post.title.trim() || m.common_untitled());
-      setPrimaryAction({
-        label:
-          processState === "PROCESSING"
-            ? m.editor_header_processing()
-            : publishActionLabel(state),
-        onClick: () => {
-          void publishRef.current();
-        },
-        disabled: processState !== "IDLE" || !canPublish,
-      });
-    }
-  }, [
-    canPublish,
-    infoOpen,
-    post.title,
-    processState,
-    state,
-    setMobileTitle,
-    setPrimaryAction,
-  ]);
-
-  useEffect(() => {
-    return () => {
-      setMobileTitle(null);
-      setPrimaryAction(null);
-    };
-  }, [setMobileTitle, setPrimaryAction]);
-
   const metadata = (
     <PostEditorMetadata
       post={post}
@@ -277,16 +250,17 @@ export function PostEditor({
         confirmLabel={m.editor_leave_confirm()}
       />
 
-      <section className="post-editor-workspace fuwari-card-base">
+      <section
+        className="post-editor-workspace post-editor-page overflow-hidden"
+        data-info-open={infoOpen || undefined}
+      >
         <PostEditorHeader
           saveStatus={saveStatus}
           lastSaved={lastSaved}
           processState={processState}
           canPublish={canPublish}
           conflicted={conflict !== null}
-          slugWithheld={
-            !isValidPostSlug(post.slug) || saveError === SLUG_TAKEN_ERROR
-          }
+          slugWithheld={slugWithheld}
           hasPublicSnapshot={post.hasPublicSnapshot}
           hasUnpublishedChanges={state === "published-changed"}
           publicSlug={post.hasPublicSnapshot ? publicSlug : null}
@@ -294,11 +268,22 @@ export function PostEditor({
           onPublish={handlePublish}
           onUnpublish={() => void handleUnpublish()}
           onDiscard={() => void handleDiscard()}
+          onViewChanges={(trigger) => {
+            changesTriggerRef.current = trigger;
+            void showChanges();
+          }}
           onDelete={() => void handleDelete()}
           isDeleting={settlingSave || deleteMutation.isPending}
           infoOpen={infoOpen}
           onOpenInfo={() => setInfoOpen((value) => !value)}
           onOpenHistory={() => void openHistory()}
+        />
+        <PostEditorChangesDialog
+          open={changesOpen}
+          changes={changes}
+          slugWithheld={slugWithheld}
+          onClose={closeChanges}
+          returnFocus={() => changesTriggerRef.current}
         />
         {conflict && (
           <Callout
@@ -343,6 +328,18 @@ export function PostEditor({
               contentClassName="min-h-50"
               documentHeader={
                 <>
+                  {post.cover ? (
+                    <figure className="post-editor-banner">
+                      <img src={post.cover.url} alt="" />
+                      <Button
+                        size="sm"
+                        variant="overlay"
+                        onClick={() => setInfoOpen(true)}
+                      >
+                        {m.editor_meta_cover_change()}
+                      </Button>
+                    </figure>
+                  ) : null}
                   <TextareaTitle
                     value={post.title}
                     onChange={(title) => handlePostChange({ title })}
@@ -361,6 +358,12 @@ export function PostEditor({
               onCreated={handleEditorCreated}
             />
           </CodeBlockHighlightProvider>
+          <PostEditorOutline
+            editor={liveEditor}
+            epoch={contentEpoch}
+            scrollContainerId="post-editor-scroll-container"
+          />
+          <PostEditorStats editor={liveEditor} epoch={contentEpoch} />
         </div>
         <PostEditorInfoPanel open={infoOpen} onClose={closeInfo}>
           {metadata}

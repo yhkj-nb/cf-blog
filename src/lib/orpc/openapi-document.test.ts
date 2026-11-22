@@ -1,3 +1,4 @@
+import skillRevision from "@/features/agent-skill/skill-revision.json";
 import { type OpenAPI, OpenAPIGenerator } from "@orpc/openapi";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { describe, expect, it, vi } from "vitest";
@@ -138,9 +139,28 @@ describe("the whole document", () => {
 });
 
 describe("the index", () => {
-  it("stays a few thousand tokens", async () => {
+  // The index grows for two reasons, and each has its own bound: the
+  // API-wide description when rules are added, the list by one line for every
+  // new operation. A single ceiling on the whole would be hit by adding
+  // operations alone.
+  it("keeps the API-wide description to a few thousand tokens", async () => {
+    const { info } = await documentAt("/spec/index.json");
+    expect(info.description?.length).toBeLessThan(12_000);
+  });
+
+  it("spends about a line on each operation", async () => {
+    const index = await documentAt("/spec/index.json");
+    const perOperation =
+      JSON.stringify(index.paths).length / operationsOf(index).length;
+    expect(perOperation).toBeLessThan(150);
+  });
+
+  // About ten thousand tokens. Reaching it calls for another shape, such as
+  // an index of the tags with the operations of one tag read apart, not for a
+  // higher number here.
+  it("is still read whole at the start of a task", async () => {
     const response = await get("/spec/index.json");
-    expect((await response.text()).length).toBeLessThan(25_000);
+    expect((await response.text()).length).toBeLessThan(40_000);
   });
 
   it("lists every operation with its id, summary and tags, and the API-wide rules", async () => {
@@ -166,6 +186,15 @@ describe("the index", () => {
     expect(info.description).toMatch(/^## Reading this document/);
     expect(info.description).toContain("/api/spec/index.json");
     expect(info.description).toContain("/api/spec.json?operationIds=");
+  });
+
+  // An agent compares this with the revision its own copy states, and old
+  // copies, which state none, learn here that a newer one exists.
+  it("states the revision of the Agent Skill the blog serves, and where", async () => {
+    const { info } = await documentAt("/spec/index.json");
+    expect(info.description).toContain(
+      `This blog serves revision ${skillRevision.revision} of the \`flare-stack-blog\` Agent Skill at \`/agent-skill.zip\``,
+    );
   });
 
   it("takes no query", async () => {

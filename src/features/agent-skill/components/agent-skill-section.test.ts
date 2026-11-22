@@ -9,7 +9,7 @@ import {
   within,
 } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { formatDate } from "@/lib/utils";
 import { m } from "@/paraglide/messages";
@@ -22,7 +22,12 @@ const pairing = vi.hoisted(() => ({
 }));
 const authKeys = vi.hoisted(() => ({ list: vi.fn(), delete: vi.fn() }));
 
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("@/lib/toast", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+// Close the menu at once; exit motion is not under test.
+vi.mock("@/hooks/use-motion", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/hooks/use-motion")>()),
+  useMotionPresence: (open: boolean) => open,
+}));
 vi.mock("@/lib/orpc", () => ({
   orpcClient: { pairing: { admin: pairing } },
 }));
@@ -147,17 +152,17 @@ it("lays out the install, pair and try steps in order", async () => {
   mountPage();
   await flush();
   const headings = screen
-    .getAllByRole("heading", { level: 3 })
+    .getAllByRole("heading", { level: 2 })
     .map((heading) => heading.textContent);
   expect(headings).toEqual([
-    `1 ${m.agent_skill_step_install()}`,
-    `2 ${m.agent_skill_step_pair()}`,
-    `3 ${m.agent_skill_step_try()}`,
+    m.agent_skill_step_install(),
+    m.agent_skill_step_pair(),
+    m.agent_skill_step_try(),
     m.agent_skill_agents_title(),
   ]);
 });
 
-it("shows the install command with a copy button and the zip link pinned to this version", async () => {
+it("shows the install command with a copy button and the same-origin zip link named for this version", async () => {
   mountPage();
   await flush();
   const command = document.querySelector("code");
@@ -170,9 +175,11 @@ it("shows the install command with a copy button and the zip link pinned to this
   const download = screen.getByRole("link", {
     name: m.agent_skill_download({ version: __APP_VERSION__ }),
   });
-  expect(download.getAttribute("href")).toBe(
-    `https://github.com/du2333/flare-stack-blog/releases/download/v${__APP_VERSION__}/flare-stack-blog-skills-v${__APP_VERSION__}.zip`,
+  expect(download.getAttribute("href")).toBe("/agent-skill.zip");
+  expect(download.getAttribute("download")).toBe(
+    `flare-stack-blog-skills-v${__APP_VERSION__}.zip`,
   );
+  expect(download.getAttribute("target")).toBeNull();
 });
 
 it("offers the four example instructions, each with a copy button, and the draft note", async () => {
@@ -569,11 +576,17 @@ it("deletes a paired agent's key after confirmation", async () => {
   });
   mountPage();
   await flush();
+  // The row's overflow menu holds 撤销.
   fireEvent.click(
     within(screen.getByRole("table")).getByRole("button", {
-      name: m.settings_api_keys_delete(),
+      name: m.settings_api_keys_row_actions({ name: "Claude Code" }),
     }),
   );
+  await flush();
+  fireEvent.click(
+    screen.getByRole("menuitem", { name: m.settings_api_keys_delete() }),
+  );
+  await flush();
   const dialog = screen.getByRole("dialog");
   expect(dialog.textContent).toContain(
     m.settings_api_keys_delete_desc({ name: "Claude Code" }),

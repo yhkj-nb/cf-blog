@@ -64,6 +64,8 @@ export default defineConfig((ctx) => {
         // 免费图床链：未配置时默认 nature/xingye/chatglm（免凭据）
         IMAGE_HOST_CONFIG: bindings.text(imageHostConfig),
         IMAGE_STORAGE_DRIVER: bindings.text(imageStorageDriver),
+        // v3.15 站点图标自动生成（与 R2 无关，仅图片缩放）
+        IMAGES: bindings.images(),
       },
       // Durable Objects are reached through `exports` from `cloudflare:workers`,
       // so they need no binding. Once deployed this way, rolling back to a

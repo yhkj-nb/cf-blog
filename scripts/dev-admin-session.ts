@@ -1,21 +1,27 @@
 /**
  * Signs a throwaway Admin into the local dev server, then removes it again.
  *
- *   bun scripts/dev-admin-session.ts seed           # prints the session cookie value
+ *   bun scripts/dev-admin-session.ts seed           # prints the session cookie value; the sign-in link goes to stderr
  *   bun scripts/dev-admin-session.ts cleanup        # lists what cleanup would delete
  *   bun scripts/dev-admin-session.ts cleanup --yes  # deletes the Admin, its session and those Posts
  *   bun scripts/dev-admin-session.ts cleanup --yes --keep 12,13  # spares Posts 12 and 13
  *
  * Sign-up needs a Turnstile token, so `seed` writes the user and session rows
- * straight into the local D1 file and signs the cookie with BETTER_AUTH_SECRET
- * from `.dev.vars`, the way better-auth does. The local database is often a
+ * straight into the local D1 file the dev server uses (the one named after the
+ * configured D1 id; `seed` prints which on stderr) and signs the cookie with
+ * BETTER_AUTH_SECRET from `.dev.vars`, the way better-auth does. The local database is often a
  * copy of production data, and nothing records who created a Post: cleanup
  * can only offer the Posts created since `seed`, which may include someone
  * else's. It lists them first and deletes only with `--yes`, together with
  * every row whose `post_id` points at them.
+ *
+ * The state file `.wrangler/dev-admin-session.json` (mode 0600, it holds the
+ * signed cookie) is what `scripts/vite-dev-admin-session.ts` serves the
+ * sign-in link from and what `bun run shots` reads the session from.
  */
 import { Database } from "bun:sqlite";
 import {
+  chmodSync,
   existsSync,
   readdirSync,
   readFileSync,
@@ -24,9 +30,14 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import { chooseDatabase, configuredD1Id } from "./local-d1-file";
+import {
+  DEV_ADMIN_SESSION_STATE_FILE,
+  signInLink,
+} from "./vite-dev-admin-session";
 
 const D1_DIR = ".wrangler/state/v3/d1/miniflare-D1DatabaseObject";
-const STATE_FILE = ".wrangler/dev-admin-session.json";
+const STATE_FILE = DEV_ADMIN_SESSION_STATE_FILE;
 const USER_ID = "dev-admin-session-user";
 const EMAIL = "dev-admin-session@example.test";
 
@@ -36,30 +47,54 @@ interface SeedState {
   lastPostId: number;
   /** Unix seconds, the unit of `posts.created_at`. */
   seededAt: number;
+  /** The signed cookie value `seed` prints; the dev server's sign-in link and `shots` read it. */
+  cookie: string;
 }
 
-function findDatabase() {
-  const candidates = readdirSync(D1_DIR)
-    .filter((name) => name.endsWith(".sqlite") && name !== "metadata.sqlite")
-    .map((name) => path.join(D1_DIR, name))
-    .filter((file) => {
-      const db = new Database(file, { readonly: true });
-      try {
-        return (
-          db.query("select 1 from sqlite_master where name = 'posts'").get() !==
-          null
-        );
-      } finally {
-        db.close();
-      }
-    })
-    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
-  if (!candidates[0]) {
-    throw new Error(
-      `No local D1 database with a posts table in ${D1_DIR}; run the dev server once first.`,
+/**
+ * When the database was last written. A running dev server holds it in WAL
+ * mode, where writes land in the `-wal` file and the main file's time stands
+ * still, so the newer of the two counts.
+ */
+function lastWrite(file: string) {
+  const wal = `${file}-wal`;
+  return Math.max(
+    statSync(file).mtimeMs,
+    existsSync(wal) ? statSync(wal).mtimeMs : 0,
+  );
+}
+
+function hasPostsTable(file: string) {
+  const db = new Database(file, { readonly: true });
+  try {
+    return (
+      db.query("select 1 from sqlite_master where name = 'posts'").get() !==
+      null
     );
+  } finally {
+    db.close();
   }
-  return candidates[0];
+}
+
+/**
+ * The database file of the dev server (see `chooseDatabase`). The rule that
+ * chose goes to stderr; stdout stays the cookie.
+ */
+function findDatabase() {
+  const files = readdirSync(D1_DIR)
+    .filter((name) => name.endsWith(".sqlite") && name !== "metadata.sqlite")
+    .map((name) => {
+      const file = path.join(D1_DIR, name);
+      return {
+        name,
+        hasPosts: hasPostsTable(file),
+        lastWrite: lastWrite(file),
+      };
+    });
+  const chosen = chooseDatabase(files, configuredD1Id(process.env));
+  const file = path.join(D1_DIR, chosen.name);
+  console.error(`database: ${file} (${chosen.why})`);
+  return file;
 }
 
 function authSecret() {
@@ -111,6 +146,8 @@ async function seed() {
   );
   db.close();
 
+  const cookie = await signCookieValue(token, authSecret());
+  // The file now holds a usable session: owner only.
   writeFileSync(
     STATE_FILE,
     JSON.stringify({
@@ -118,9 +155,14 @@ async function seed() {
       sessionId,
       lastPostId,
       seededAt: Math.floor(now / 1000),
+      cookie,
     } satisfies SeedState),
+    { mode: 0o600 },
   );
-  console.log(await signCookieValue(token, authSecret()));
+  chmodSync(STATE_FILE, 0o600);
+  const link = signInLink(readFileSync(".dev.vars", "utf8"));
+  if (link) console.error(`sign-in link (dev server only): ${link}`);
+  console.log(cookie);
 }
 
 function cleanup(confirmed: boolean, keep: ReadonlySet<number>) {

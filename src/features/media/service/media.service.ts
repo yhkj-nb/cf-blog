@@ -94,14 +94,22 @@ export async function upload(
 export async function deleteImage(
   context: DbContext & { executionCtx: ExecutionContext },
   key: string,
+  options: { withRevisions?: boolean } = {},
 ) {
   // The in-use check is part of the delete, so a Post saved meanwhile with
   // the image either makes it refuse or is refused itself.
-  if (!(await MediaRepo.deleteMediaIfUnused(context.db, key))) {
+  const withRevisions = options.withRevisions
+    ? await MediaRepo.deleteMediaWithRevisions(context.db, key)
+    : undefined;
+  const deleted = options.withRevisions
+    ? withRevisions !== null
+    : await MediaRepo.deleteMediaIfUnused(context.db, key);
+  if (!deleted) {
     return (await MediaRepo.findMediaByKey(context.db, key))
       ? err({ reason: "MEDIA_IN_USE" })
       : err({ reason: "MEDIA_NOT_FOUND" });
   }
+  // 免费图床链：删除外部图床上的图片（替换上游的 deleteFromR2）
   context.executionCtx.waitUntil(
     Storage.deleteImageStorage(context.env, key).catch((deleteError) =>
       console.error(
@@ -117,7 +125,11 @@ export async function deleteImage(
     ),
   );
 
-  return ok({ success: true });
+  return ok(
+    withRevisions
+      ? { success: true, deletedRevisionCount: withRevisions.revisionCount }
+      : { success: true },
+  );
 }
 
 export async function getMediaList(

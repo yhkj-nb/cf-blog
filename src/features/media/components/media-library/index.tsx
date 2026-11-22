@@ -1,25 +1,32 @@
-import { Upload } from "lucide-react";
+import {
+  CheckCheck,
+  ImageOff,
+  Images,
+  Link2,
+  Search,
+  Upload,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
-import { useAdminChrome } from "@/components/admin/admin-chrome";
-import { PageHeader } from "@/components/ui/page-heading";
+import { toast } from "@/lib/toast";
+import { AdminPage } from "@/components/admin/admin-page";
 import { ACCEPTED_IMAGE_TYPES } from "@/features/media/media.schema";
-import { cn, formatBytes } from "@/lib/utils";
+import { mediaUsageOf } from "@/features/media/utils/media.utils";
+import { formatBytes } from "@/lib/utils";
 import {
   MOTION,
   useContentMotion,
-  useMediaQuery,
   useMotionPresence,
 } from "@/hooks/use-motion";
 import { EmptyState } from "@/components/ui/empty-state";
+import { FloatingPopover } from "@/components/ui/floating-popover";
 import { m } from "@/paraglide/messages";
-import { MediaDetail, MediaToolbar } from "./components";
+import { MediaDetail, MediaToolbar, MediaUrlField } from "./components";
 import { MediaCollection } from "./components/media-collection";
 import { Button } from "@/components/ui/button";
 import ConfirmationModal from "@/components/ui/confirmation-modal";
+import { Spinner } from "@/components/ui/spinner";
 import { useMediaLibrary, useMediaUpload } from "./hooks";
 import { useMediaScroll } from "./hooks/use-media-scroll";
-import { MEDIA_LAYOUT_DURATION } from "./hooks/use-media-grid-motion";
 import { MediaCollectionSkeleton } from "./media-library-skeleton";
 import { MediaInUseError } from "./media-usage";
 import type { MediaAsset } from "./types";
@@ -31,17 +38,25 @@ export function MediaLibrary() {
   const collectionRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const selectedTrigger = useRef<HTMLButtonElement | null>(null);
-  const { setPrimaryAction } = useAdminChrome();
   const [preview, setPreview] = useState<MediaAsset | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<
     { kind: "one"; asset: MediaAsset } | { kind: "unused" } | null
   >(null);
   const [dragging, setDragging] = useState(false);
+  const [importAnchor, setImportAnchor] = useState<HTMLButtonElement | null>(
+    null,
+  );
+  const [importOpen, setImportOpen] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
   const {
     mediaItems,
     unusedOnly,
     setUnusedOnly,
+    search,
+    setSearch,
+    sort,
+    setSort,
     view,
     setView,
     loadMore,
@@ -63,39 +78,33 @@ export function MediaLibrary() {
     ? (mediaItems.find((item) => item.key === preview.key) ?? preview)
     : null;
 
-  const compact = useMediaQuery("(max-width: 1199px)");
-  const detailPresent = useMotionPresence(
-    !!active,
-    compact ? MOTION.modal : MEDIA_LAYOUT_DURATION,
-  );
+  const detailPresent = useMotionPresence(!!active, MOTION.modal);
   const retained = useRef<MediaAsset | null>(null);
   if (active) retained.current = active;
   const detailAsset = active ?? retained.current;
   const focusPending = useRef(false);
   useContentMotion(
     contentRef,
-    `${view}:${unusedOnly}:${isPending}:${mediaItems.map((item) => item.key).join(",")}`,
+    `${view}:${unusedOnly}:${search}:${sort}:${isPending}:${mediaItems.map((item) => item.key).join(",")}`,
   );
 
   const captureAnchor = useMediaScroll(
     collectionRef,
-    `${view}:${!!active}`,
-    String(unusedOnly),
+    view,
+    `${unusedOnly}:${search.trim()}:${sort}`,
   );
 
   useEffect(() => {
     setPreview(null);
-  }, [unusedOnly]);
+  }, [unusedOnly, search, sort]);
 
-  useEffect(() => {
-    setPrimaryAction({
-      label: m.media_upload(),
-      onClick: () => fileRef.current?.click(),
-      disabled: isUploading,
-    });
-    return () => setPrimaryAction(null);
-  }, [isUploading, setPrimaryAction]);
-
+  const activeIndex = active
+    ? mediaItems.findIndex((item) => item.key === active.key)
+    : -1;
+  const step = (delta: -1 | 1) => {
+    const next = mediaItems[activeIndex + delta];
+    if (next) setPreview(next);
+  };
   const openFilePicker = () => fileRef.current?.click();
   const closePreview = () => {
     captureAnchor(preview?.key);
@@ -115,11 +124,18 @@ export function MediaLibrary() {
   const handleFiles = (files: FileList | Array<File>) => {
     if (!isUploading) void uploadFiles(Array.from(files));
   };
+  // An image only Post Revisions use goes with those revisions.
+  const withRevisions =
+    deleteTarget?.kind === "one" &&
+    mediaUsageOf(deleteTarget.asset) === "revisions-only";
   const confirmDelete = async () => {
     if (!deleteTarget || isDeleting) return;
     try {
       if (deleteTarget.kind === "one")
-        await deleteKeys([deleteTarget.asset.key]);
+        await deleteKeys({
+          keys: [deleteTarget.asset.key],
+          withRevisions: withRevisions || undefined,
+        });
       else await deleteUnused();
       setDeleteTarget(null);
       closePreview();
@@ -129,11 +145,86 @@ export function MediaLibrary() {
       else if (error instanceof MediaInUseError) setDeleteTarget(null);
     }
   };
+  const toolbar = (
+    <MediaToolbar
+      unusedOnly={unusedOnly}
+      onUnusedOnlyChange={(value) => {
+        setPreview(null);
+        setUnusedOnly(value);
+      }}
+      unusedCount={stats?.unusedCount}
+      totalCount={stats?.totalCount}
+      search={search}
+      onSearchChange={setSearch}
+      sort={sort}
+      onSortChange={setSort}
+      view={view}
+      onViewChange={(next) => {
+        captureAnchor(preview?.key);
+        void setView(next);
+      }}
+    />
+  );
+  const searchTerm = search.trim();
   const isEmpty = !isPending && !isError && mediaItems.length === 0;
 
   return (
-    <div
-      className="media-workspace admin-workspace fuwari-card-base"
+    <AdminPage
+      className="media-workspace"
+      title={m.media_title()}
+      count={
+        stats
+          ? m.media_stats({
+              count: stats.totalCount,
+              size: formatBytes(stats.totalBytes),
+            })
+          : "—"
+      }
+      primaryAction={{
+        label: m.media_upload(),
+        icon: <Upload size={17} />,
+        ref: uploadRef,
+        disabled: isUploading,
+        onClick: () => fileRef.current?.click(),
+      }}
+      actions={
+        <>
+          <Button
+            ref={setImportAnchor}
+            variant="outline"
+            icon={<Link2 size={16} />}
+            aria-haspopup="dialog"
+            aria-expanded={importOpen}
+            onClick={() => setImportOpen((open) => !open)}
+          >
+            {m.media_import_link()}
+          </Button>
+          <FloatingPopover
+            open={importOpen}
+            anchor={importAnchor}
+            placement="bottom-end"
+            onDismiss={() => setImportOpen(false)}
+            returnFocusOnEscape
+            initialFocus={() => importInputRef.current}
+            role="dialog"
+            aria-label={m.media_import_link()}
+            className="w-96 max-w-[calc(100vw-1rem)] p-2"
+          >
+            <MediaUrlField
+              inputRef={importInputRef}
+              known={mediaItems}
+              onImport={() => {
+                setImportOpen(false);
+                toast.success(m.media_import_success());
+              }}
+            />
+          </FloatingPopover>
+        </>
+      }
+      toolbar={toolbar}
+      body="list"
+      scroll={false}
+      inset={false}
       onDragEnter={(event) => {
         if (!event.dataTransfer.types.includes("Files")) return;
         event.preventDefault();
@@ -156,52 +247,7 @@ export function MediaLibrary() {
           handleFiles(event.dataTransfer.files);
       }}
     >
-      <PageHeader
-        className="media-workspace-header"
-        title={m.media_title()}
-        description={
-          stats
-            ? m.media_stats({
-                count: stats.totalCount,
-                size: formatBytes(stats.totalBytes),
-              })
-            : "—"
-        }
-        actions={
-          <Button
-            ref={uploadRef}
-            variant="primary"
-            icon={<Upload size={17} />}
-            disabled={isUploading}
-            onClick={openFilePicker}
-          >
-            {m.media_upload()}
-          </Button>
-        }
-      />
-      <MediaToolbar
-        unusedOnly={unusedOnly}
-        onUnusedOnlyChange={(value) => {
-          setPreview(null);
-          setUnusedOnly(value);
-        }}
-        unusedCount={stats?.unusedCount}
-        totalCount={stats?.totalCount}
-        view={view}
-        onViewChange={(next) => {
-          captureAnchor(preview?.key);
-          void setView(next);
-        }}
-      />
-      {progress ? (
-        <p role="status" className="media-upload-progress">
-          {m.media_uploading({
-            current: progress.current,
-            total: progress.total,
-          })}
-        </p>
-      ) : null}
-      <div className={cn("media-workspace-body", active && "has-preview")}>
+      <div className="media-workspace-body">
         <div
           className="media-browser custom-scrollbar"
           data-scroll-restoration-id="admin-media-list"
@@ -216,22 +262,51 @@ export function MediaLibrary() {
               <MediaCollectionSkeleton view={view} />
             ) : isError && !mediaItems.length ? (
               <EmptyState
+                variant="tile"
                 role="alert"
+                icon={ImageOff}
                 description={m.media_load_fail()}
                 action={
-                  <Button onClick={() => void refetch()}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void refetch()}
+                  >
                     {m.media_load_retry()}
+                  </Button>
+                }
+              />
+            ) : isEmpty && searchTerm ? (
+              <EmptyState
+                variant="tile"
+                icon={Search}
+                title={
+                  unusedOnly
+                    ? m.media_search_empty_unreferenced({ query: searchTerm })
+                    : m.media_search_empty({ query: searchTerm })
+                }
+                action={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSearch("")}
+                  >
+                    {m.search_clear()}
                   </Button>
                 }
               />
             ) : isEmpty ? (
               <EmptyState
+                variant="tile"
+                icon={unusedOnly ? CheckCheck : Images}
                 title={
                   unusedOnly ? m.media_unreferenced_empty() : m.media_empty()
                 }
                 description={!unusedOnly ? m.media_empty_hint() : null}
                 action={
                   <Button
+                    variant="outline"
+                    size="sm"
                     onClick={
                       unusedOnly ? () => setUnusedOnly(false) : openFilePicker
                     }
@@ -254,11 +329,20 @@ export function MediaLibrary() {
                 />
                 <footer className="media-browser-footer">
                   {isError && !isFetchNextPageError ? (
-                    <Button onClick={() => void refetch()}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void refetch()}
+                    >
                       {m.media_load_retry()}
                     </Button>
                   ) : hasMore || isFetchNextPageError ? (
-                    <Button loading={isLoadingMore} onClick={loadMore}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      loading={isLoadingMore}
+                      onClick={loadMore}
+                    >
                       {isLoadingMore
                         ? m.media_grid_loading()
                         : isFetchNextPageError
@@ -284,28 +368,43 @@ export function MediaLibrary() {
             )}
           </div>
         </div>
-        <div className="media-panel-slot">
-          {detailPresent && detailAsset ? (
-            <MediaDetail
-              open={!!active}
-              asset={detailAsset}
-              onClose={closePreview}
-              onReplace={async (key, file) => {
-                const next = await replaceFile({ key, image: file });
-                if (next)
-                  setPreview((previous) =>
-                    previous?.key === key ? { ...previous, ...next } : previous,
-                  );
-              }}
-              onDelete={(asset) => setDeleteTarget({ kind: "one", asset })}
-              isReplacing={isReplacing}
-              preventClose={deleteTarget !== null}
-            />
-          ) : null}
-        </div>
       </div>
+      {detailPresent && detailAsset ? (
+        <MediaDetail
+          open={!!active}
+          asset={detailAsset}
+          onClose={closePreview}
+          onStep={step}
+          hasPrevious={activeIndex > 0}
+          hasNext={activeIndex >= 0 && activeIndex < mediaItems.length - 1}
+          onReplace={async (key, file) => {
+            const next = await replaceFile({ key, image: file });
+            if (next)
+              setPreview((previous) =>
+                previous?.key === key ? { ...previous, ...next } : previous,
+              );
+          }}
+          onDelete={(asset) => setDeleteTarget({ kind: "one", asset })}
+          isReplacing={isReplacing}
+          preventClose={deleteTarget !== null}
+        />
+      ) : null}
+      {progress ? (
+        <p role="status" className="media-upload-progress">
+          <Spinner size={14} />
+          {m.media_uploading({
+            current: progress.current,
+            total: progress.total,
+          })}
+        </p>
+      ) : null}
       {dragging ? (
-        <div className="media-drop-overlay">{m.media_drop()}</div>
+        <div className="media-drop-overlay">
+          <span>
+            <Upload size={22} aria-hidden="true" />
+          </span>
+          {m.media_drop()}
+        </div>
       ) : null}
       <input
         ref={fileRef}
@@ -323,7 +422,13 @@ export function MediaLibrary() {
         title={m.media_delete_title()}
         message={
           deleteTarget?.kind === "one"
-            ? m.media_delete_one({ name: deleteTarget.asset.fileName })
+            ? withRevisions
+              ? m.media_delete_with_revisions({
+                  name: deleteTarget.asset.fileName,
+                  revisions: deleteTarget.asset.revisionCount,
+                  posts: deleteTarget.asset.revisionOnlyPostCount,
+                })
+              : m.media_delete_one({ name: deleteTarget.asset.fileName })
             : m.media_unused_confirm({ count: stats?.unusedCount ?? 0 })
         }
         confirmLabel={m.media_delete()}
@@ -336,6 +441,6 @@ export function MediaLibrary() {
           uploadRef.current
         }
       />
-    </div>
+    </AdminPage>
   );
 }

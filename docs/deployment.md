@@ -19,10 +19,9 @@
 2. [准备两份变量清单](#2-准备两份变量清单)
 3. [创建 GitHub OAuth App](#3-创建-github-oauth-app)
 4. [创建 Cloudflare 资源](#4-创建-cloudflare-资源)
-5. [可选：开启图片优化](#5-可选开启图片优化)
-6. [创建 Worker 并部署](#6-创建-worker-并部署)
-7. [登录博客，成为管理员](#7-登录博客成为管理员)
-8. [以后如何更新](#8-以后如何更新)
+5. [创建 Worker 并部署](#5-创建-worker-并部署)
+6. [登录博客，成为管理员](#6-登录博客成为管理员)
+7. [以后如何更新](#7-以后如何更新)
 
 ### 1. Fork 仓库
 
@@ -49,7 +48,7 @@
 
 | 变量 | 示例 / 从哪里获取 | 作用 |
 | --- | --- | --- |
-| `WORKER_NAME` | `flare-blog` | Worker 应用名称，第 6 步的 Project name 必须与它一致 |
+| `WORKER_NAME` | `flare-blog` | Worker 应用名称，第 5 步的 Project name 必须与它一致 |
 | `DOMAIN` | `blog.example.com` | 博客的纯域名 |
 | `D1_DATABASE_ID` | 第 4 步复制的 Database ID / UUID | 找到存放文章、用户等数据的数据库 |
 | `BUCKET_NAME` | `blog-media` | 找到存放图片等文件的 R2 存储桶 |
@@ -153,19 +152,7 @@ Array.from(crypto.getRandomValues(new Uint8Array(32)), (n) =>
 
 ![KV 命名空间列表中的 ID](./assets/deployment/06-kv-id.png)
 
-### 5. 可选：开启图片优化
-
-开启 Cloudflare **Image Transformations（图片转换）** 后，博客会按需要对图片进行缩放和压缩。
-
-在 Cloudflare 账号侧栏打开 **Images & Stream → Transformations**（部分界面位于 Images 下），找到博客所属的根域名，例如 `example.com`，为该域名启用转换。
-
-进入域名的转换设置，Sources 选择 **This zone only**，允许本域名及其子域名作为图片来源，点击 **Save** 保存修改。
-
-![已启用图片转换的域名设置，Sources 选择 This zone only](./assets/deployment/08-images.png)
-
-域名列表显示 **Enabled**，或设置页显示 **Disable for zone**，即表示已启用。跳过此步骤时，博客使用原图。转换额度及价格见 [Cloudflare Images 定价](https://developers.cloudflare.com/images/pricing/)。
-
-### 6. 创建 Worker 并部署
+### 5. 创建 Worker 并部署
 
 #### 连接自己的 Fork
 
@@ -214,7 +201,7 @@ Array.from(crypto.getRandomValues(new Uint8Array(32)), (n) =>
 
 最后在 Worker 的 **Domains**（部分界面为 Settings → Domains & Routes）中确认自己的域名已绑定；DNS 和证书生效后，通过 `https://blog.example.com` 访问。
 
-### 7. 登录博客，成为管理员
+### 6. 登录博客，成为管理员
 
 打开自己的博客域名，点击右上角的登录入口，选择 **GitHub 登录**，完成 GitHub 授权。第一次登录会自动创建博客用户。
 
@@ -226,7 +213,7 @@ Array.from(crypto.getRandomValues(new Uint8Array(32)), (n) =>
 
 进入后台后，可以设置博客名称、介绍和外观，上传一张图片并发布第一篇文章。GitHub 登录不依赖邮件配置；读者使用邮箱登录（输入邮件里的 6 位登录码）以及通知邮件，都需要之后在后台配置邮件发送服务。配置前，登录页只显示 GitHub 登录。
 
-### 8. 以后如何更新
+### 7. 以后如何更新
 
 上游有新代码时，先阅读 [更新说明](https://github.com/du2333/flare-stack-blog/releases)，然后：
 
@@ -246,6 +233,22 @@ Array.from(crypto.getRandomValues(new Uint8Array(32)), (n) =>
 
 若更新说明要求新增变量或调整配置，请一并完成。自行修改过代码的仓库，可能需要先解决同步冲突。
 
+#### 跨大版本升级
+
+`bun run deploy` 在迁移数据库之前会先做一次部署前检查。同一大版本内的更新直接通过；同步后跨越了大版本（例如从 3.x 到 4.x）时，构建会在这一步停下，Cloudflare 显示构建失败。此时数据库没有迁移，新版本也没有部署，博客继续运行原来的版本。各个版本级别的含义见 [版本约定](./version-contract.md)。
+
+原因写在构建日志里：打开 Worker 的 **Deployments / Builds**，点开失败的那次构建，找到以「部署前检查未通过，构建已停止」开头的段落。它按顺序列出升级前必须完成的事项，以及新的大版本需要、但还没有添加的 Build variable 和 Secret，逐项完成即可。需要的变量只在升级到新的大版本时检查。
+
+完成这些事项后还需要确认一次：在 **Settings → Builds** 的 **Build variables**（部分界面显示为 Variables and secrets）中添加 `UPGRADE_ACK`，值为新版本的大版本号，例如升级到 4.x 时填 `UPGRADE_ACK=4`。然后重试这次构建（Retry build），日志会显示「UPGRADE_ACK=4 已确认，继续部署」。降到更低的大版本同样需要确认，值为更低的那个大版本号，因为新版本可能已经改动了数据库。
+
+升级完成后 `UPGRADE_ACK` 可以一直保留。同一大版本内的更新不检查它；下一次跨越大版本时，检查会要求把它改成新的数字。
+
+检查本身读不到线上信息时，构建同样会停下，日志以同一句话开头，并写明是哪一步读取失败。常见原因是构建使用的 API token 权限不足，或者没有填写 `WORKER_NAME`、`D1_DATABASE_ID`。修正后重试构建即可。
+
+检查依靠每次部署时打上的版本标签判断线上版本，这个标签由 `bun run deploy` 打上。绕过它直接运行 `cf deploy` 部署的版本没有标签：下一次检查会跳过它，沿着更早的部署往回找；最近的部署都没有标签时，站点按 v3 处理。
+
+部署前检查是在 v3 中加入的，加入之前安装、没有版本记录的站点一律按 v3 处理，所以从 v2.x 升级到 v3 时不会被拦下，仍然需要按上面的说明手动完成那两件事。
+
 ## 可选配置
 
 先完成基本部署，再按需添加。所有变量的完整说明以 [.env.example](../.env.example) 和 [.dev.vars.example](../.dev.vars.example) 为准。
@@ -254,8 +257,10 @@ Array.from(crypto.getRandomValues(new Uint8Array(32)), (n) =>
 | --- | --- | --- | --- |
 | Turnstile 人机验证 | `VITE_TURNSTILE_SITE_KEY` | `TURNSTILE_SECRET_KEY`（Secret） | 在 Cloudflare 创建站点并添加博客域名；Site Key 与 Secret Key 成对使用 |
 | Umami 访问统计 | `VITE_UMAMI_WEBSITE_ID` | `UMAMI_WEBSITE_ID`、`UMAMI_SRC` | 两边 Website ID 填同一个，`UMAMI_SRC` 填服务地址，例如 `https://cloud.umami.is` |
-| Umami 文章热度同步 | 同上 | Cloud 使用 `UMAMI_API_KEY`；自托管使用 `UMAMI_USERNAME`、`UMAMI_PASSWORD` | API Key 和密码设为 Secret；两种认证方式二选一。API 地址可按模板配置 `UMAMI_API_URL` |
-| 后台更新检查改走 GitHub API | 无 | `GITHUB_TOKEN`（Secret） | 不配也能检查更新：默认读取 GitHub 发布页的跳转。配了 token 会优先走 API，更稳定；API 失败时仍会退回发布页。按模板链接创建 Fine-grained token，权限保留默认的公共仓库只读访问 |
+| Umami 文章热度同步 | 同上 | `UMAMI_API_KEY`；3.4.0 之前的自托管 Umami 使用 `UMAMI_USERNAME`、`UMAMI_PASSWORD` | Umami Cloud 和 3.4.0 及以上的自托管 Umami 都使用 API Key，自托管的在 Umami 的 **Settings → API keys** 中创建。API 地址按 `UMAMI_SRC` 判断：Umami Cloud 的地址使用 `https://api.umami.is/v1`，其他地址使用它下面的 `/api`，需要别的地址时再配置 `UMAMI_API_URL`。API Key 和密码设为 Secret，两种认证方式二选一；使用账号密码时，该账号不能开启两步验证，修改密码后这里要同步修改 |
+| 后台更新检查 | 无 | 无 | 无需配置：后台读取上游仓库的 `upgrades.json` 检查更新，取不到时读取 GitHub 发布页的跳转。旧版本使用的 `GITHUB_TOKEN` 已不再读取，留着没有影响，也可以从 Worker 的变量中删除 |
+
+图片优化无需额外配置：Worker 通过 Images 绑定对 R2 中的公开图片按需缩放和压缩，部署后自动生效，不需要在 Cloudflare 控制台开启。Cloudflare Images 免费计划每个自然月包含 5,000 次唯一转换，同一张图片的同一组尺寸参数每月只计一次，格式和质量不产生新的组合。额度及价格见 [Cloudflare Images 定价](https://developers.cloudflare.com/images/pricing/)。
 
 修改**构建时变量**后，需要重新触发构建，新值才会进入部署产物。修改**运行时变量**后，使用保存并部署使其生效。
 
@@ -300,7 +305,7 @@ GitHub OAuth Redirect URI：   https://blog.example.com/api/auth/callback/github
 
 ### 图片能显示，但没有优化效果
 
-确认博客所属域名的 Transformations 已启用，Sources 允许博客域名及其子域名，并且转换额度可用。本地环境、GIF、原图请求不会转换，转换失败也会回退原图。应使用博客公开页面中请求了宽度或质量参数的图片检查效果。
+确认 Worker 的 **Bindings** 中存在 Images 绑定，并在 Cloudflare 的 Images 页面检查本月转换额度。额度用尽后新的转换会失败并回退原图，可在 Workers 日志中搜索 `image transform error`。本地环境、GIF、SVG、`original=true` 请求以及不在预设宽度内的请求不会转换。应使用博客公开页面中请求了宽度或质量参数的图片检查效果。
 
 ---
 

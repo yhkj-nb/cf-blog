@@ -6,6 +6,8 @@ import {
   purgeOptionsFor,
   workersCacheKey,
   workersCachePolicy,
+  workersCacheRoute,
+  workersEdgeCacheKey,
 } from "./workers-cache-policy";
 
 describe("workersCacheKey", () => {
@@ -69,6 +71,95 @@ describe("workersCacheKey", () => {
     expect(
       workersCacheKey("https://blog.example/images/loop.gif?original=true"),
     ).toBe("/images/loop.gif?original=true");
+  });
+
+  it("keys a transformed image by the format the route will serve", () => {
+    const url = "https://blog.example/images/cover.png?width=800&quality=80";
+    expect(workersCacheKey(url, "image/avif,image/webp,*/*")).toBe(
+      "/images/cover.png?quality=80&width=800&format=avif",
+    );
+    expect(workersCacheKey(url, "image/webp,*/*")).toBe(
+      "/images/cover.png?quality=80&width=800&format=webp",
+    );
+    expect(workersCacheKey(url, "text/html")).toBe(
+      "/images/cover.png?quality=80&width=800&format=original",
+    );
+    expect(workersCacheKey(url)).toBe(
+      "/images/cover.png?quality=80&width=800&format=original",
+    );
+  });
+
+  it("shares one image entry across Accept spellings of the same format", () => {
+    const url = "https://blog.example/images/cover.png?width=800";
+    expect(workersCacheKey(url, "image/avif,image/webp,*/*")).toBe(
+      workersCacheKey(url, "image/webp;q=0.5, image/avif"),
+    );
+    expect(workersCacheKey(url, "image/webp")).toBe(
+      workersCacheKey(url, "text/html, image/webp;q=0.9, */*;q=0.8"),
+    );
+  });
+
+  it("adds no format to an image the route serves as the original", () => {
+    const accept = "image/avif,image/webp";
+    // Not an allowed width, an extra parameter, original=true, a GIF.
+    expect(
+      workersCacheKey(
+        "https://blog.example/images/cover.png?width=123",
+        accept,
+      ),
+    ).toBe("/images/cover.png?width=123");
+    expect(
+      workersCacheKey(
+        "https://blog.example/images/cover.png?width=800&fit=cover",
+        accept,
+      ),
+    ).toBe("/images/cover.png?width=800&fit=cover");
+    expect(
+      workersCacheKey(
+        "https://blog.example/images/cover.png?width=800&original=true",
+        accept,
+      ),
+    ).toBe("/images/cover.png?original=true&width=800");
+    expect(
+      workersCacheKey("https://blog.example/images/loop.gif?width=800", accept),
+    ).toBe("/images/loop.gif?width=800");
+    expect(
+      workersCacheKey("https://blog.example/images/cover.png", accept),
+    ).toBe("/images/cover.png");
+  });
+
+  it("ignores Accept for everything but images", () => {
+    expect(workersCacheKey("https://blog.example/posts", "image/avif")).toBe(
+      "/posts",
+    );
+  });
+});
+
+describe("workersEdgeCacheKey", () => {
+  it("prefixes pages with the build so a deploy starts fresh", () => {
+    expect(
+      workersEdgeCacheKey("https://blog.example/post/hello?x=1", "", "b1"),
+    ).toBe("/_build/b1/post/hello");
+    expect(workersEdgeCacheKey("https://blog.example/?page=2", "", "b1")).toBe(
+      "/_build/b1/?page=2",
+    );
+    expect(workersEdgeCacheKey("https://blog.example/stats.js", "", "b1")).toBe(
+      "/_build/b1/stats.js",
+    );
+  });
+
+  it("keeps image keys the same across builds", () => {
+    const url = "https://blog.example/images/cover.png?width=800";
+    const accept = "image/avif,image/webp";
+    expect(workersEdgeCacheKey(url, accept, "b1")).toBe(
+      "/images/cover.png?width=800&format=avif",
+    );
+    expect(workersEdgeCacheKey(url, accept, "b2")).toBe(
+      workersEdgeCacheKey(url, accept, "b1"),
+    );
+    expect(
+      workersEdgeCacheKey("https://blog.example/images/cover.png", "", "b2"),
+    ).toBe("/images/cover.png");
   });
 });
 
@@ -152,6 +243,8 @@ describe("workersCachePolicy", () => {
     });
   });
 
+  // The tag comes from the path alone, so the width and format in the cache
+  // key cannot leave a variant behind.
   it("purges every cached copy of a replaced Media key", () => {
     const target = mediaPurgeTarget("cover.webp") as { tags: string[] };
     const policy = workersCachePolicy("/images/cover.webp");
@@ -383,5 +476,125 @@ describe("applyWorkersCachePolicy", () => {
     expect(response.headers.get("Cache-Tag")).toBe(
       "html,posts,popularity,moments",
     );
+  });
+});
+
+describe("Theme previews and the cache", () => {
+  const PREVIEW =
+    "themePreview=fixture&themePreviewOptions=%7B%22marker%22%3A%22off%22%7D";
+  const SESSION = "better-auth.session_token=abc.def";
+
+  it("leaves a request without the preview parameters as it is", () => {
+    const request = new Request("https://blog.example/posts?tagName=rust", {
+      headers: { Cookie: SESSION },
+    });
+    expect(workersCacheRoute(request, "b1")).toEqual({
+      cache: "lookup",
+      request,
+      cacheKey: "/_build/b1/posts?tagName=rust",
+    });
+  });
+
+  it("drops the preview without a session cookie, keeping the key and policy of the plain page", () => {
+    for (const cookie of [undefined, "theme=dark; lang=zh"]) {
+      const route = workersCacheRoute(
+        new Request(`https://blog.example/?page=2&${PREVIEW}`, {
+          headers: cookie ? { Cookie: cookie } : {},
+        }),
+        "b1",
+      );
+      expect(route.cache).toBe("lookup");
+      if (route.cache !== "lookup") return;
+      expect(route.cacheKey).toBe(
+        workersEdgeCacheKey("https://blog.example/?page=2", "", "b1"),
+      );
+      expect(route.request.url).toBe("https://blog.example/?page=2");
+      expect(route.request.headers.get("Cookie")).toBe(cookie ?? null);
+
+      const response = applyWorkersCachePolicy(
+        route.request,
+        new Response("<html></html>", { headers: CACHE_CONTROL.html }),
+      );
+      expect(response.headers.get("Cache-Control")).toBe(
+        CACHE_CONTROL.html["Cache-Control"],
+      );
+      expect(response.headers.get("Cache-Tag")).toBe(
+        "html,posts,popularity,moments",
+      );
+    }
+  });
+
+  it("bypasses the cache for a preview with a session cookie, on HTTP and HTTPS names", () => {
+    for (const cookie of [SESSION, `lang=zh; __Secure-${SESSION}`]) {
+      const request = new Request(`https://blog.example/posts?${PREVIEW}`, {
+        headers: { Cookie: cookie },
+      });
+      expect(workersCacheRoute(request, "b1")).toEqual({
+        cache: "bypass",
+        request,
+      });
+    }
+    // Either parameter alone asks for a preview.
+    const request = new Request("https://blog.example/?themePreview=", {
+      headers: { Cookie: SESSION },
+    });
+    expect(workersCacheRoute(request, "b1").cache).toBe("bypass");
+  });
+
+  it("treats a preview with a draft of Site Config the same way", () => {
+    const DRAFT = `themePreviewDraft=${encodeURIComponent(
+      JSON.stringify({ tagline: "Draft", primaryHue: 120 }),
+    )}`;
+    for (const query of [`${PREVIEW}&${DRAFT}`, DRAFT]) {
+      const withSession = new Request(`https://blog.example/?${query}`, {
+        headers: { Cookie: SESSION },
+      });
+      expect(workersCacheRoute(withSession, "b1")).toEqual({
+        cache: "bypass",
+        request: withSession,
+      });
+      const rendered = applyWorkersCachePolicy(
+        withSession,
+        new Response("<html></html>", {
+          headers: { ...CACHE_CONTROL.html, "Cache-Tag": "html" },
+        }),
+      );
+      expect(rendered.headers.get("Cache-Control")).toMatch(
+        /^private, no-store/,
+      );
+      expect(rendered.headers.get("Cache-Tag")).toBeNull();
+
+      const anonymous = workersCacheRoute(
+        new Request(`https://blog.example/?${query}`),
+        "b1",
+      );
+      expect(anonymous.cache).toBe("lookup");
+      if (anonymous.cache !== "lookup") return;
+      expect(anonymous.request.url).toBe("https://blog.example/");
+      expect(anonymous.cacheKey).toBe("/_build/b1/");
+    }
+  });
+
+  it("makes a page rendered with the preview parameters private and untagged", () => {
+    for (const path of ["/", "/posts", "/post/hello", "/moments/3"]) {
+      const response = applyWorkersCachePolicy(
+        new Request(`https://blog.example${path}?${PREVIEW}`, {
+          headers: { Cookie: SESSION },
+        }),
+        new Response("<html></html>", {
+          headers: { ...CACHE_CONTROL.html, "Cache-Tag": "html" },
+        }),
+      );
+      expect(response.headers.get("Cache-Control")).toBe(
+        CACHE_CONTROL.private["Cache-Control"],
+      );
+      expect(response.headers.get("Cache-Control")).toMatch(
+        /^private, no-store/,
+      );
+      expect(response.headers.get("CDN-Cache-Control")).toBe(
+        CACHE_CONTROL.private["CDN-Cache-Control"],
+      );
+      expect(response.headers.get("Cache-Tag")).toBeNull();
+    }
   });
 });

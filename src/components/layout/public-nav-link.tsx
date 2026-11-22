@@ -1,10 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
-import type { NavOption } from "@/components/layout/layout-props";
+import type { AnchorHTMLAttributes, ReactNode } from "react";
+import type { NavLinkOption } from "@/components/layout/layout-props";
 
 const STATIC_HREF = {
   "/": "/",
   "/posts": "/posts",
+  "/moments": "/moments",
   "/friend-links": "/friend-links",
 } as const;
 
@@ -14,18 +16,31 @@ function postSlugFromHref(href: string): string | null {
   return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
+/**
+ * A navigation link: the router's for a page of this site, a plain one that
+ * opens in a new tab for another site. `role`, `tabIndex` and `aria-current`
+ * go to the link, for a row of a menu (`MenuLinkItem`). It shows the link's
+ * name, with a mark after it when it leaves the site; `children` replace
+ * both, for a place that draws its rows itself.
+ */
 export function PublicNavLink({
   option,
   className,
   activeClassName,
   onClick,
+  children,
+  ...linkProps
 }: {
-  option: NavOption;
+  option: NavLinkOption;
   className?: string;
   activeClassName?: string;
   onClick?: () => void;
-}) {
-  const label = (
+  children?: ReactNode;
+} & Pick<
+  AnchorHTMLAttributes<HTMLAnchorElement>,
+  "role" | "tabIndex" | "aria-current"
+>) {
+  const label = children ?? (
     <>
       <span className="truncate">{option.label}</span>
       {option.external ? (
@@ -41,6 +56,7 @@ export function PublicNavLink({
   if (option.external) {
     return (
       <a
+        {...linkProps}
         href={option.href}
         target="_blank"
         rel="noreferrer"
@@ -56,6 +72,7 @@ export function PublicNavLink({
   if (slug) {
     return (
       <Link
+        {...linkProps}
         to="/post/$slug"
         params={{ slug }}
         className={className}
@@ -73,6 +90,7 @@ export function PublicNavLink({
   if (staticTo) {
     return (
       <Link
+        {...linkProps}
         to={staticTo}
         className={className}
         activeProps={
@@ -86,7 +104,12 @@ export function PublicNavLink({
   }
 
   return (
-    <a href={option.href} className={className} onClick={onClick}>
+    <a
+      {...linkProps}
+      href={option.href}
+      className={className}
+      onClick={onClick}
+    >
       {label}
     </a>
   );
